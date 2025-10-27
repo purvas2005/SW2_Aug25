@@ -1,2 +1,4 @@
  .env
  data/minted-certificates.json
+ node_modules/
+node_modules/
