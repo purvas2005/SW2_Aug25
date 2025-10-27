@@ -6,3 +6,5 @@ curl -X POST http://localhost:5001/api/mint \
   "event": "Innovate 2025 Hackathon",
   "date": "October 16, 2025"
 }'
+
+

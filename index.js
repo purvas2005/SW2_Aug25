@@ -5,32 +5,25 @@ const cors = require("cors");
 const { generateCertificate } = require("./services/certificate");
 const { uploadBufferToPinata, uploadJsonToPinata } = require("./services/pinata");
 const { mintCertificateNft } = require("./services/polygon");
+const { connectDB, saveCertificateRecord } = require("./services/database"); // Import DB functions
 
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-// --- Middleware ---
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// --- Routes ---
+// Routes
 app.get("/", (req, res) => {
   res.send("Blockchain Certificate Minter API is running!");
 });
 
-/**
- * API Endpoint to handle the full minting process.
- */
 app.post("/api/mint", async (req, res) => {
   try {
-    // 1. Get student data from the request body.
-    // Notice 'recipientAddress' has been removed.
     const { studentName, srn, event, date } = req.body;
-
-    // Read the university's wallet address from environment variables.
     const universityWallet = process.env.COMMON_WALLET_ADDRESS;
 
-    // Basic validation.
     if (!studentName || !srn || !event || !date) {
       return res.status(400).json({ error: "Missing required student fields." });
     }
@@ -38,15 +31,11 @@ app.post("/api/mint", async (req, res) => {
         return res.status(500).json({ error: "Server configuration error: Common wallet address is not set." });
     }
 
-    // 2. Generate the certificate image in memory.
     const certificateBuffer = await generateCertificate(studentName, srn, event, date, null); 
-    
-    // 3. Upload the certificate image to IPFS.
     const imageFileName = `Certificate-${srn}-${event}.png`;
     const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
     const imageUrl = `ipfs://${imageCid}`;
 
-    // 4. Create the NFT Metadata JSON.
     const metadata = {
       name: `Certificate: ${event} - ${studentName}`,
       description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
@@ -59,21 +48,32 @@ app.post("/api/mint", async (req, res) => {
       ],
     };
 
-    // 5. Upload the metadata JSON to IPFS.
     const metadataFileName = `Metadata-${srn}-${event}.json`;
     const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
     const metadataUri = `ipfs://${metadataCid}`;
 
-    // 6. Mint the NFT on the Polygon blockchain to the common university wallet.
     const txHash = await mintCertificateNft(universityWallet, metadataUri);
 
-    // 7. Send the successful response back to the client.
-    res.status(200).json({
-      message: "Certificate minted successfully!",
+    // --- ✅ New Logic: Save Metadata to MongoDB ---
+    const newRecord = {
+      studentName,
+      srn,
+      event,
+      date,
+      mintedAt: new Date(), // Using a native Date object
       transactionHash: txHash,
-      recipientAddress: universityWallet, // You can optionally return the address it was sent to.
+      recipientAddress: universityWallet,
       metadataUri: metadataUri,
       imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
+    };
+    
+    // Call the service to save the record to the database
+    await saveCertificateRecord(newRecord);
+    // --- End of New Logic ---
+
+    res.status(200).json({
+      message: "Certificate minted and record saved to database successfully!",
+      ...newRecord
     });
 
   } catch (error) {
@@ -83,7 +83,18 @@ app.post("/api/mint", async (req, res) => {
   }
 });
 
-// --- Start Server ---
-app.listen(PORT, () => {
-  console.log(`🚀 Server is listening on http://localhost:${PORT}`);
-});
+/**
+ * Starts the server after connecting to the database.
+ */
+const startServer = async () => {
+    try {
+        await connectDB(); // Connect to MongoDB Atlas
+        app.listen(PORT, () => {
+            console.log(`🚀 Server is listening on http://localhost:${PORT}`);
+        });
+    } catch (error) {
+        console.error("Failed to start server:", error);
+    }
+};
+
+startServer();
