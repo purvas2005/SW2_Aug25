@@ -48,4 +48,19 @@ const saveCertificateRecord = async (record) => {
     }
 };
 
-module.exports = { connectDB, saveCertificateRecord };
+const findCertificateBySrn = async (srn) => {
+    if (!db) {
+        throw new Error("Database not connected.");
+    }
+    try {
+        const collection = db.collection("certificates");
+        // Use findOne for an efficient lookup
+        const record = await collection.findOne({ srn: srn });
+        return record;
+    } catch (error) {
+        console.error("❌ Error finding record in MongoDB", error);
+        throw new Error("Failed to query the database.");
+    }
+};
+
+module.exports = { connectDB, saveCertificateRecord, findCertificateBySrn };

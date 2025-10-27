@@ -46,4 +46,37 @@ const mintCertificateNft = async (recipientAddress, metadataUri) => {
   }
 };
 
-module.exports = { mintCertificateNft };
+
+
+// --- ✅ New Function ---
+/**
+ * Verifies if a transaction was successful on the blockchain.
+ * @param {string} txHash The transaction hash to verify.
+ * @returns {Promise<boolean>} True if the transaction was successful, false otherwise.
+ */
+const verifyTransaction = async (txHash) => {
+    try {
+        // Get the transaction receipt from the blockchain
+        const receipt = await provider.getTransactionReceipt(txHash);
+
+        // A receipt will be null if the transaction is still pending
+        if (!receipt) {
+            console.log(`Transaction ${txHash} is pending or not found.`);
+            return false;
+        }
+
+        // The 'status' field is 1 for a successful transaction and 0 for a failed one
+        if (receipt.status === 1) {
+            console.log(`✅ Verification successful for tx: ${txHash}`);
+            return true;
+        } else {
+            console.log(`❌ Verification failed for tx: ${txHash}. Transaction reverted.`);
+            return false;
+        }
+    } catch (error) {
+        console.error("❌ Error verifying transaction:", error);
+        return false;
+    }
+};
+
+module.exports = { mintCertificateNft, verifyTransaction }; // Add verifyTransaction to exports
