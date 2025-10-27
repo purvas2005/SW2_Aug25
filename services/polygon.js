@@ -30,8 +30,8 @@ const mintCertificateNft = async (recipientAddress, metadataUri) => {
   try {
     console.log(`✨ Attempting to mint NFT for ${recipientAddress} with metadata: ${metadataUri}`);
 
-    // Call the 'mint' function (or whatever it's named in your contract)
-    const tx = await contract.mint(recipientAddress, metadataUri);
+    // Call the 'mintBadge' function from your smart contract
+    const tx = await contract.mintBadge(recipientAddress, metadataUri);
 
     console.log("⏳ Transaction sent. Waiting for confirmation...");
     
