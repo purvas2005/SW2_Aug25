@@ -8,10 +8,8 @@ const rpcUrl = process.env.POLYGON_AMOY_RPC_URL;
 const privateKey = process.env.MINTER_PRIVATE_KEY;
 const contractAddress = process.env.CONTRACT_ADDRESS;
 
-// Load the contract's ABI from the JSON file
 const abiPath = path.join(__dirname, '..', 'contract-abi.json');
 const contractABI = JSON.parse(fs.readFileSync(abiPath, 'utf8'));
-
 
 // --- Setup Connection ---
 const provider = new ethers.JsonRpcProvider(rpcUrl);
@@ -30,12 +28,12 @@ const mintCertificateNft = async (recipientAddress, metadataUri) => {
   try {
     console.log(`✨ Attempting to mint NFT for ${recipientAddress} with metadata: ${metadataUri}`);
 
-    // Call the 'mintBadge' function from your smart contract
-    const tx = await contract.mintBadge(recipientAddress, metadataUri);
+    // Call the 'mintBadge' function with all three required arguments.
+    // We'll use a generic "Certificate" as the badgeType for now.
+    const tx = await contract.mintBadge(recipientAddress, "Certificate", metadataUri);
 
     console.log("⏳ Transaction sent. Waiting for confirmation...");
     
-    // Wait for the transaction to be mined (1 confirmation)
     const receipt = await tx.wait(1);
 
     console.log("✅ Transaction confirmed!");
@@ -44,7 +42,6 @@ const mintCertificateNft = async (recipientAddress, metadataUri) => {
     return receipt.hash;
   } catch (error) {
     console.error("❌ Error minting NFT:", error.message);
-    // You can add more detailed error parsing here if needed
     throw new Error("Smart contract transaction failed.");
   }
 };
