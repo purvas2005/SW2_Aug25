@@ -1,0 +1,12 @@
+curl -X POST http://localhost:5001/api/mint \
+-H "Content-Type: application/json" \
+-d '{
+  "studentName": "Yash Gupta",
+  "srn": "PES1UG21CS999",
+  "event": "Innovate 2025 Hackathon",
+  "date": "October 16, 2025"
+}'
+
+
+GET http://localhost:5001/api/verify/PES1UG21CS999
+
