@@ -10,3 +10,8 @@ curl -X POST http://localhost:5001/api/mint \
 
 GET http://localhost:5001/api/verify/PES1UG21CS999
 
+Windows: Invoke-RestMethod -Uri "http://localhost:5001/api/mint" -Method POST -Headers @{ "Content-Type" = "application/json" } -Body '{"studentName": "Yash Gupta", "srn": "PES1UG21CS999", "event": "Innovate 2025 Hackathon", "date": "October 16, 2025"}'
+
+
+http://localhost:5173/certificate/PES1UG21CS999/innovate2025hackathon
+

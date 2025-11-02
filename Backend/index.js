@@ -80,6 +80,80 @@ app.post("/api/mint", async (req, res) => {
   }
 });
 
+// --- ✅ New Endpoint to Get All Certificates ---
+/**
+ * Retrieves all certificate records from the database
+ */
+app.get("/api/certificates", async (req, res) => {
+    try {
+        const { getAllCertificates } = require("./services/database");
+        const certificates = await getAllCertificates();
+        
+        // Transform the data to match frontend expectations
+        const transformedCertificates = certificates.map(cert => ({
+            _id: cert._id,
+            srn: cert.srn,
+            eventName: cert.event, // Map 'event' to 'eventName'
+            certificateUrl: cert.imageUrl,
+            studentName: cert.studentName,
+            issueDate: cert.date,
+            description: `Certificate for ${cert.event}`,
+            badgeType: cert.badgeType || null,
+            mintedAt: cert.mintedAt,
+            transactionHash: cert.transactionHash,
+            verified: true // Assume verified since it's in our database
+        }));
+        
+        res.status(200).json(transformedCertificates);
+    } catch (error) {
+        console.error("Failed to fetch certificates:", error);
+        res.status(500).json({ error: "Failed to retrieve certificates" });
+    }
+});
+
+// --- ✅ New Endpoint to Get Certificate by SRN and Event ---
+/**
+ * Retrieves a specific certificate by SRN and event name
+ */
+app.get("/api/certificate/:srn/:eventName", async (req, res) => {
+    try {
+        const { srn, eventName } = req.params;
+        const { getAllCertificates } = require("./services/database");
+        const certificates = await getAllCertificates();
+        
+        // Find certificate by matching SRN and normalized event name
+        const foundCertificate = certificates.find(cert => {
+            const normalizedDbEventName = cert.event.replace(/\s+/g, '').toLowerCase();
+            const normalizedRequestEventName = eventName.toLowerCase();
+            return cert.srn === srn && normalizedDbEventName === normalizedRequestEventName;
+        });
+        
+        if (!foundCertificate) {
+            return res.status(404).json({ error: "Certificate not found" });
+        }
+        
+        // Transform the data to match frontend expectations
+        const transformedCertificate = {
+            _id: foundCertificate._id,
+            srn: foundCertificate.srn,
+            eventName: foundCertificate.event,
+            certificateUrl: foundCertificate.imageUrl,
+            studentName: foundCertificate.studentName,
+            issueDate: foundCertificate.date,
+            description: `Certificate for ${foundCertificate.event}`,
+            badgeType: foundCertificate.badgeType || null,
+            mintedAt: foundCertificate.mintedAt,
+            transactionHash: foundCertificate.transactionHash,
+            verified: true
+        };
+        
+        res.status(200).json(transformedCertificate);
+    } catch (error) {
+        console.error("Failed to fetch certificate:", error);
+        res.status(500).json({ error: "Failed to retrieve certificate" });
+    }
+});
+
 // --- ✅ New Verification Endpoint ---
 /**
  * Verifies a certificate's authenticity by checking its transaction on the blockchain.

@@ -10,6 +10,7 @@ const AdminNavigationTabs: React.FC<AdminNavigationTabsProps> = ({ activeTab, se
   const tabs = [
     { id: 'home', label: 'Home', icon: 'fa-home' },
     { id: 'badge-management', label: 'Badge Management', icon: 'fa-medal' },
+    { id: 'certificate-list', label: 'Certificates', icon: 'fa-certificate' },
   ];
 
   return (

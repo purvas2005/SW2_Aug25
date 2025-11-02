@@ -63,4 +63,23 @@ const findCertificateBySrn = async (srn) => {
     }
 };
 
-module.exports = { connectDB, saveCertificateRecord, findCertificateBySrn };
+/**
+ * Retrieves all certificate records from the 'certificates' collection.
+ * @returns {Promise<Array>} Array of all certificate records
+ */
+const getAllCertificates = async () => {
+    if (!db) {
+        throw new Error("Database not connected.");
+    }
+    try {
+        const collection = db.collection("certificates");
+        const certificates = await collection.find({}).toArray();
+        console.log(`✅ Retrieved ${certificates.length} certificate records from MongoDB`);
+        return certificates;
+    } catch (error) {
+        console.error("❌ Error retrieving certificates from MongoDB", error);
+        throw new Error("Failed to retrieve certificates from database.");
+    }
+};
+
+module.exports = { connectDB, saveCertificateRecord, findCertificateBySrn, getAllCertificates };
