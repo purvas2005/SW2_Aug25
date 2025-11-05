@@ -26,7 +26,7 @@ const AdminHome = () => {
   ) => {
     try {
       setLoading(true);
-      const res = await axios.get('http://localhost:4000/api/teams');
+      const res = await axios.get('http://localhost:5001/api/teams');
       const validTeams = res.data.fullTeams.filter(Boolean);
 
       const badgeTypes = ['Newbie', 'Amateur', 'Intermediate', 'Pro', 'EntePROneur', 'Legend'];
