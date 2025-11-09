@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import AdminHeader from './components/AdminHeader';
-import AdminNavigationTabs from './components/AdminNavigationTabs';
 import AdminHome from './components/AdminHome';
+import AdminNavigationTabs from './components/AdminNavigationTabs';
 import BadgeManagement from './components/BadgeManagement';
 import CertificateList from './components/CertificateList';
 import './index.css';

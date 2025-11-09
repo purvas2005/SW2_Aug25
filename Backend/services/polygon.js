@@ -2,6 +2,8 @@
 const { ethers } = require("ethers");
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config();
+
 
 // --- Load Config and ABI ---
 const rpcUrl = process.env.POLYGON_AMOY_RPC_URL;
