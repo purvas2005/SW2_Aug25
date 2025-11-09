@@ -9,8 +9,8 @@ const path = require("path");
 
 const generateCertificate = async (name, srn, event, date, qrCodeData) => {
   try {
-    // Point this to your new blank template 'Final 5.jpg'
-    const templatePath = path.join(__dirname, '..', 'assets', 'certificate_template.png');
+    // Use the renamed template file from the remote changes
+    const templatePath = path.join(__dirname, '..', 'assets', 'certificate_template.jpg');
     const image = await loadImage(templatePath);
 
     const canvas = createCanvas(image.width, image.height);
@@ -25,31 +25,34 @@ const generateCertificate = async (name, srn, event, date, qrCodeData) => {
     ctx.fillStyle = "#1A2E40"; // Dark Navy matched to PES logo
     ctx.textAlign = "center";
 
-    // --- 3. Dynamic Text (Coordinates tuned for 'Final 5.jpg') ---
+    // --- 3. Dynamic Text (Coordinates optimized for the new template) ---
 
     // STUDENT NAME
-    // Sits in the big gap between "presented to" and "for successfully completing"
+    // Use absolute positioning for better accuracy with the new template
     ctx.font = "bold 85px Inter, Sans-serif"; 
-    ctx.fillText(name.toUpperCase(), W / 2, H * 0.40);
+    ctx.fillText(name.toUpperCase(), 1710, 1125);
 
-    // SRN
+    // SRN (keeping this from your local changes)
     // Sits right below the name
     ctx.font = "35px Inter, Sans-serif";
     ctx.fillStyle = "#555555"; // Slightly lighter for hierarchy
-    ctx.fillText(`(SRN: ${srn})`, W / 2, H * 0.45);
+    ctx.fillText(`(SRN: ${srn})`, 1710, 1180);
 
     // EVENT NAME
-    // Sits between "for successfully completing" and "at CIE Spark 2025"
-    // If you truly don't want this, pass an empty string "" as the 'event' argument.
-    // ctx.fillStyle = "#1A2E40"; // Back to navy
-    // ctx.font = "bold 45px Inter, Sans-serif";
-    // ctx.fillText(event, W / 2, H * 0.625); 
+    // Use the remote positioning but keep it enabled
+    ctx.fillStyle = "#1A2E40"; // Back to navy
+    ctx.font = "bold 45px Inter, Sans-serif";
+    ctx.fillText(event, 1710, 1360); 
 
     // DATE
-    // Moved to bottom left to align with the SPARK logo area
+    // Use the remote positioning
     ctx.textAlign = "left"; 
     ctx.font = "30px Inter, Sans-serif";
-    ctx.fillText(`Date: ${date}`, W * 0.09, H * 0.86);
+    ctx.fillText(`Date: ${date}`, 1555, 1500);
+
+    // Debug logging from remote changes
+    console.log("W/2", W/2);
+    console.log("H/2", H/2);
 
     // QR CODE
     if (qrCodeData) {
