@@ -2,10 +2,12 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 const { generateCertificate } = require("./services/certificate");
 const { uploadBufferToPinata, uploadJsonToPinata } = require("./services/pinata");
 const { mintCertificateNft, verifyTransaction } = require("./services/polygon"); // --- New: Import verifyTransaction ---
-const { connectDB, saveCertificateRecord, findCertificateBySrn } = require("./services/database"); // --- New: Import findCertificateBySrn ---
+const { connectDB, saveCertificateRecord, findCertificateBySrn, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue } = require("./services/database"); // --- New: Import retry queue functions ---
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -201,6 +203,352 @@ app.get("/api/verify/:srn", async (req, res) => {
         });
     }
 });
+
+// --- ✅ New Endpoint to Serve Badge Data ---
+/**
+ * Reads badge data from badges.csv and serves it as JSON.
+ */
+app.get("/api/badges", async (req, res) => {
+    try {
+        const csvFilePath = path.join(__dirname, "assets", "badges.csv");
+        
+        if (!fs.existsSync(csvFilePath)) {
+            return res.status(404).json({ error: "badges.csv file not found" });
+        }
+
+        const csvData = fs.readFileSync(csvFilePath, "utf8");
+        const lines = csvData.trim().split("\n");
+        const headers = lines[0].split(",").map(h => h.trim());
+        
+        const badges = [];
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i].trim()) {
+                const values = lines[i].split(",").map(v => v.trim());
+                const badge = {};
+                headers.forEach((header, index) => {
+                    badge[header] = values[index] || "";
+                });
+                badges.push(badge);
+            }
+        }
+
+        res.status(200).json(badges);
+    } catch (error) {
+        console.error("Failed to read badges.csv:", error);
+        res.status(500).json({ error: "Failed to retrieve badge data" });
+    }
+});
+
+// --- ✅ New Endpoint for Bulk Badge Minting ---
+/**
+ * Mints certificates for all students in the badges.csv file
+ */
+app.post("/api/mint-all-badges", async (req, res) => {
+    try {
+        const csvFilePath = path.join(__dirname, "assets", "badges.csv");
+        
+        if (!fs.existsSync(csvFilePath)) {
+            return res.status(404).json({ error: "badges.csv file not found" });
+        }
+
+        const csvData = fs.readFileSync(csvFilePath, "utf8");
+        const lines = csvData.trim().split("\n");
+        const headers = lines[0].split(",").map(h => h.trim());
+        
+        const results = [];
+        const universityWallet = process.env.COMMON_WALLET_ADDRESS;
+
+        if (!universityWallet) {
+            return res.status(500).json({ error: "Server configuration error: Common wallet address is not set." });
+        }
+
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i].trim()) {
+                try {
+                    const values = lines[i].split(",").map(v => v.trim());
+                    const student = {};
+                    headers.forEach((header, index) => {
+                        student[header] = values[index] || "";
+                    });
+
+                    const { studentName, srn, event, date } = student;
+
+                    if (!studentName || !srn || !event || !date) {
+                        results.push({
+                            studentName: studentName || "Unknown",
+                            srn: srn || "Unknown",
+                            status: "failed",
+                            error: "Missing required fields"
+                        });
+                        continue;
+                    }
+
+                    // Check if certificate already exists
+                    const existingRecord = await findCertificateBySrn(srn);
+                    if (existingRecord && existingRecord.event === event) {
+                        results.push({
+                            studentName,
+                            srn,
+                            event,
+                            status: "skipped",
+                            message: "Certificate already exists"
+                        });
+                        continue;
+                    }
+
+                    // Generate and mint certificate
+                    const certificateBuffer = await generateCertificate(studentName, srn, event, date, null);
+                    const imageFileName = `Certificate-${srn}-${event}.png`;
+                    const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
+                    const imageUrl = `ipfs://${imageCid}`;
+
+                    const metadata = {
+                        name: `Certificate: ${event} - ${studentName}`,
+                        description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
+                        image: imageUrl,
+                        attributes: [
+                            { trait_type: "Student Name", value: studentName },
+                            { trait_type: "SRN", value: srn },
+                            { trait_type: "Event", value: event },
+                            { trait_type: "Date", value: date },
+                        ],
+                    };
+
+                    const metadataFileName = `Metadata-${srn}-${event}.json`;
+                    const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
+                    const metadataUri = `ipfs://${metadataCid}`;
+
+                    const txHash = await mintCertificateNft(universityWallet, metadataUri);
+
+                    const newRecord = {
+                        studentName,
+                        srn,
+                        event,
+                        date,
+                        mintedAt: new Date(),
+                        transactionHash: txHash,
+                        recipientAddress: universityWallet,
+                        metadataUri: metadataUri,
+                        imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
+                    };
+
+                    await saveCertificateRecord(newRecord);
+
+                    results.push({
+                        studentName,
+                        srn,
+                        event,
+                        status: "success",
+                        transactionHash: txHash,
+                        imageUrl: newRecord.imageUrl
+                    });
+
+                } catch (error) {
+                    console.error(`Failed to mint certificate for student ${i}:`, error);
+                    
+                    // Add failed certificate to retry queue
+                    const failedRecord = {
+                        studentName: values[0] || "Unknown",
+                        srn: values[1] || "Unknown", 
+                        event: values[2] || "Unknown",
+                        date: values[3] || "Unknown",
+                        error: error.message
+                    };
+                    
+                    try {
+                        await addToRetryQueue(failedRecord);
+                        results.push({
+                            ...failedRecord,
+                            status: "failed",
+                            error: error.message,
+                            queued: true
+                        });
+                    } catch (queueError) {
+                        console.error("Failed to add to retry queue:", queueError);
+                        results.push({
+                            ...failedRecord,
+                            status: "failed",
+                            error: error.message,
+                            queued: false
+                        });
+                    }
+                }
+            }
+        }
+
+        const successCount = results.filter(r => r.status === "success").length;
+        const failedCount = results.filter(r => r.status === "failed").length;
+        const skippedCount = results.filter(r => r.status === "skipped").length;
+
+        res.status(200).json({
+            message: "Bulk minting completed",
+            summary: {
+                total: results.length,
+                successful: successCount,
+                failed: failedCount,
+                skipped: skippedCount
+            },
+            results
+        });
+
+    } catch (error) {
+        console.error("--- BULK MINTING PROCESS FAILED ---");
+        console.error(error);
+        res.status(500).json({ error: "An internal server error occurred during bulk minting.", details: error.message });
+    }
+});
+
+// --- ✅ New Endpoint to Get Retry Queue Status ---
+/**
+ * Gets the current retry queue status
+ */
+app.get("/api/retry-queue", async (req, res) => {
+    try {
+        const queueItems = await getRetryQueueItems();
+        res.status(200).json({
+            queueLength: queueItems.length,
+            items: queueItems
+        });
+    } catch (error) {
+        console.error("Failed to fetch retry queue:", error);
+        res.status(500).json({ error: "Failed to retrieve retry queue" });
+    }
+});
+
+// --- ✅ New Endpoint to Manually Process Retry Queue ---
+/**
+ * Manually processes the retry queue
+ */
+app.post("/api/process-retry-queue", async (req, res) => {
+    try {
+        const results = await processRetryQueue();
+        res.status(200).json({
+            message: "Retry queue processed",
+            results
+        });
+    } catch (error) {
+        console.error("Failed to process retry queue:", error);
+        res.status(500).json({ error: "Failed to process retry queue" });
+    }
+});
+
+// --- ✅ Retry Queue Processing Function ---
+/**
+ * Processes the retry queue and attempts to mint failed certificates
+ */
+const processRetryQueue = async () => {
+    const queueItems = await getRetryQueueItems();
+    const results = [];
+    const universityWallet = process.env.COMMON_WALLET_ADDRESS;
+
+    if (!universityWallet) {
+        throw new Error("Server configuration error: Common wallet address is not set.");
+    }
+
+    for (const item of queueItems) {
+        try {
+            const { studentName, srn, event, date, _id } = item;
+
+            // Check if certificate was created since adding to queue
+            const existingRecord = await findCertificateBySrn(srn);
+            if (existingRecord && existingRecord.event === event) {
+                await removeFromRetryQueue(_id);
+                results.push({
+                    studentName,
+                    srn,
+                    event,
+                    status: "removed",
+                    message: "Certificate already exists"
+                });
+                continue;
+            }
+
+            // Attempt to mint the certificate
+            const certificateBuffer = await generateCertificate(studentName, srn, event, date, null);
+            const imageFileName = `Certificate-${srn}-${event}.png`;
+            const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
+            const imageUrl = `ipfs://${imageCid}`;
+
+            const metadata = {
+                name: `Certificate: ${event} - ${studentName}`,
+                description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
+                image: imageUrl,
+                attributes: [
+                    { trait_type: "Student Name", value: studentName },
+                    { trait_type: "SRN", value: srn },
+                    { trait_type: "Event", value: event },
+                    { trait_type: "Date", value: date },
+                ],
+            };
+
+            const metadataFileName = `Metadata-${srn}-${event}.json`;
+            const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
+            const metadataUri = `ipfs://${metadataCid}`;
+
+            const txHash = await mintCertificateNft(universityWallet, metadataUri);
+
+            const newRecord = {
+                studentName,
+                srn,
+                event,
+                date,
+                mintedAt: new Date(),
+                transactionHash: txHash,
+                recipientAddress: universityWallet,
+                metadataUri: metadataUri,
+                imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
+            };
+
+            await saveCertificateRecord(newRecord);
+            await removeFromRetryQueue(_id);
+
+            results.push({
+                studentName,
+                srn,
+                event,
+                status: "success",
+                transactionHash: txHash,
+                message: "Successfully minted on retry"
+            });
+
+        } catch (error) {
+            console.error(`Retry failed for ${item.studentName} (${item.srn}):`, error);
+            
+            // Update retry count and status
+            const updateData = {
+                status: item.retryCount >= 2 ? 'failed_permanently' : 'pending',
+                error: error.message
+            };
+
+            await updateRetryQueueItem(item._id, updateData);
+
+            results.push({
+                studentName: item.studentName,
+                srn: item.srn,
+                event: item.event,
+                status: item.retryCount >= 2 ? "failed_permanently" : "retry_failed",
+                error: error.message,
+                retryCount: item.retryCount + 1
+            });
+        }
+    }
+
+    return results;
+};
+
+// --- ✅ Background Retry Processing (runs every 5 minutes) ---
+setInterval(async () => {
+    try {
+        console.log("🔄 Running background retry queue processing...");
+        const results = await processRetryQueue();
+        if (results.length > 0) {
+            console.log(`✅ Processed ${results.length} retry queue items:`, 
+                results.map(r => `${r.studentName}: ${r.status}`));
+        }
+    } catch (error) {
+        console.error("❌ Background retry processing failed:", error);
+    }
+}, 5 * 60 * 1000); // 5 minutes
 
 /**
  * Starts the server after connecting to the database.

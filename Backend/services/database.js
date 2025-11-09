@@ -40,7 +40,7 @@ const saveCertificateRecord = async (record) => {
     try {
         const collection = db.collection("certificates");
         const result = await collection.insertOne(record);
-        console.log(` Certificate record saved to MongoDB with _id: ${result.insertedId}`);
+        console.log(`✅ Certificate record saved to MongoDB with _id: ${result.insertedId}`);
         return result;
     } catch (error) {
         console.error("Error saving record to MongoDB", error);
@@ -82,4 +82,114 @@ const getAllCertificates = async () => {
     }
 };
 
-module.exports = { connectDB, saveCertificateRecord, findCertificateBySrn, getAllCertificates };
+/**
+ * Adds a failed certificate to the retry queue
+ * @param {object} failedRecord - The failed certificate data
+ * @returns {Promise<import('mongodb').InsertOneResult>}
+ */
+const addToRetryQueue = async (failedRecord) => {
+    if (!db) {
+        throw new Error("Database not connected.");
+    }
+    try {
+        const collection = db.collection("retry_queue");
+        const queueRecord = {
+            ...failedRecord,
+            status: 'pending',
+            retryCount: 0,
+            maxRetries: 3,
+            addedAt: new Date(),
+            lastRetryAt: null,
+            error: failedRecord.error || null
+        };
+        const result = await collection.insertOne(queueRecord);
+        console.log(`✅ Added failed certificate to retry queue with _id: ${result.insertedId}`);
+        return result;
+    } catch (error) {
+        console.error("❌ Error adding to retry queue", error);
+        throw new Error("Failed to add to retry queue.");
+    }
+};
+
+/**
+ * Gets pending items from the retry queue
+ * @returns {Promise<Array>} Array of pending retry items
+ */
+const getRetryQueueItems = async () => {
+    if (!db) {
+        throw new Error("Database not connected.");
+    }
+    try {
+        const collection = db.collection("retry_queue");
+        const items = await collection.find({ 
+            status: 'pending',
+            retryCount: { $lt: 3 } // Less than max retries
+        }).toArray();
+        console.log(`✅ Retrieved ${items.length} items from retry queue`);
+        return items;
+    } catch (error) {
+        console.error("❌ Error retrieving retry queue items", error);
+        throw new Error("Failed to retrieve retry queue items.");
+    }
+};
+
+/**
+ * Updates a retry queue item after a retry attempt
+ * @param {string} id - The _id of the retry queue item
+ * @param {object} updateData - Update data (success/failure)
+ * @returns {Promise<import('mongodb').UpdateResult>}
+ */
+const updateRetryQueueItem = async (id, updateData) => {
+    if (!db) {
+        throw new Error("Database not connected.");
+    }
+    try {
+        const collection = db.collection("retry_queue");
+        const result = await collection.updateOne(
+            { _id: id },
+            { 
+                $set: {
+                    ...updateData,
+                    lastRetryAt: new Date()
+                },
+                $inc: { retryCount: 1 }
+            }
+        );
+        console.log(`✅ Updated retry queue item ${id}`);
+        return result;
+    } catch (error) {
+        console.error("❌ Error updating retry queue item", error);
+        throw new Error("Failed to update retry queue item.");
+    }
+};
+
+/**
+ * Removes a successfully processed item from the retry queue
+ * @param {string} id - The _id of the retry queue item
+ * @returns {Promise<import('mongodb').DeleteResult>}
+ */
+const removeFromRetryQueue = async (id) => {
+    if (!db) {
+        throw new Error("Database not connected.");
+    }
+    try {
+        const collection = db.collection("retry_queue");
+        const result = await collection.deleteOne({ _id: id });
+        console.log(`✅ Removed item ${id} from retry queue`);
+        return result;
+    } catch (error) {
+        console.error("❌ Error removing from retry queue", error);
+        throw new Error("Failed to remove from retry queue.");
+    }
+};
+
+module.exports = { 
+    connectDB, 
+    saveCertificateRecord, 
+    findCertificateBySrn, 
+    getAllCertificates,
+    addToRetryQueue,
+    getRetryQueueItems,
+    updateRetryQueueItem,
+    removeFromRetryQueue
+};
