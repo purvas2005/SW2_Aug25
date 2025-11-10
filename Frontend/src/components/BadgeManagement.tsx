@@ -149,7 +149,7 @@ const BadgeManagement = () => {
                   className="mint-all-button"
                   disabled={minting || students.length === 0}
                 >
-                  {minting ? 'Minting Badges...' : `Mint All ${students.length} Badges`}
+                  {minting ? 'Minting Badges...' : `Mint ${students.length} Badges`}
                 </button>
                 
                 {minting && (
