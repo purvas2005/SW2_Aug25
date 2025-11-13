@@ -23,34 +23,36 @@ app.get("/", (req, res) => {
 
 app.post("/api/mint", async (req, res) => {
   try {
-    const { studentName, srn, event, date } = req.body;
+    const { studentName, srn, achievement, date, projectDescription, studentEmail } = req.body;
     const universityWallet = process.env.COMMON_WALLET_ADDRESS;
 
-    if (!studentName || !srn || !event || !date) {
+    if (!studentName || !srn || !achievement || !date) {
       return res.status(400).json({ error: "Missing required student fields." });
     }
     if (!universityWallet) {
         return res.status(500).json({ error: "Server configuration error: Common wallet address is not set." });
     }
 
-    const certificateBuffer = await generateCertificate(studentName, srn, event, date, null); 
-    const imageFileName = `Certificate-${srn}-${event}.png`;
+    const certificateBuffer = await generateCertificate(studentName, srn, achievement, date, projectDescription, null); 
+    const imageFileName = `Certificate-${srn}-${achievement}.png`;
     const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
     const imageUrl = `ipfs://${imageCid}`;
 
     const metadata = {
-      name: `Certificate: ${event} - ${studentName}`,
-      description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
+      name: `Certificate: ${achievement} - ${studentName}`,
+      description: `This certificate is awarded to ${studentName} for ${achievement} on ${date}. Project: ${projectDescription || 'N/A'}`,
       image: imageUrl,
       attributes: [
         { trait_type: "Student Name", value: studentName },
         { trait_type: "SRN", value: srn },
-        { trait_type: "Event", value: event },
+        { trait_type: "Achievement", value: achievement },
         { trait_type: "Date", value: date },
+        { trait_type: "Project Description", value: projectDescription || "" },
+        { trait_type: "Student Email", value: studentEmail || "" },
       ],
     };
 
-    const metadataFileName = `Metadata-${srn}-${event}.json`;
+    const metadataFileName = `Metadata-${srn}-${achievement}.json`;
     const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
     const metadataUri = `ipfs://${metadataCid}`;
 
@@ -59,8 +61,11 @@ app.post("/api/mint", async (req, res) => {
     const newRecord = {
       studentName,
       srn,
-      event,
+      achievement,
+      event: achievement, // Keep for backward compatibility
       date,
+      projectDescription: projectDescription || "",
+      studentEmail: studentEmail || "",
       mintedAt: new Date(),
       transactionHash: txHash,
       recipientAddress: universityWallet,
@@ -271,9 +276,9 @@ app.post("/api/mint-all-badges", async (req, res) => {
                         student[header] = values[index] || "";
                     });
 
-                    const { studentName, srn, event, date } = student;
+                    const { studentName, srn, achievement, date, projectDescription, studentEmail } = student;
 
-                    if (!studentName || !srn || !event || !date) {
+                    if (!studentName || !srn || !achievement || !date) {
                         results.push({
                             studentName: studentName || "Unknown",
                             srn: srn || "Unknown",
@@ -285,11 +290,11 @@ app.post("/api/mint-all-badges", async (req, res) => {
 
                     // Check if certificate already exists
                     const existingRecord = await findCertificateBySrn(srn);
-                    if (existingRecord && existingRecord.event === event) {
+                    if (existingRecord && existingRecord.event === achievement) {
                         results.push({
                             studentName,
                             srn,
-                            event,
+                            event: achievement,
                             status: "skipped",
                             message: "Certificate already exists"
                         });
@@ -297,24 +302,26 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     }
 
                     // Generate and mint certificate
-                    const certificateBuffer = await generateCertificate(studentName, srn, event, date, null);
-                    const imageFileName = `Certificate-${srn}-${event}.png`;
+                    const certificateBuffer = await generateCertificate(studentName, srn, achievement, date, projectDescription, studentEmail);
+                    const imageFileName = `Certificate-${srn}-${achievement}.png`;
                     const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
                     const imageUrl = `ipfs://${imageCid}`;
 
                     const metadata = {
-                        name: `Certificate: ${event} - ${studentName}`,
-                        description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
+                        name: `Certificate: ${achievement} - ${studentName}`,
+                        description: `This certificate is awarded to ${studentName} for ${achievement} on ${date}. Project: ${projectDescription || 'N/A'}`,
                         image: imageUrl,
                         attributes: [
                             { trait_type: "Student Name", value: studentName },
                             { trait_type: "SRN", value: srn },
-                            { trait_type: "Event", value: event },
+                            { trait_type: "Achievement", value: achievement },
                             { trait_type: "Date", value: date },
+                            { trait_type: "Project Description", value: projectDescription || "" },
+                            { trait_type: "Student Email", value: studentEmail || "" },
                         ],
                     };
 
-                    const metadataFileName = `Metadata-${srn}-${event}.json`;
+                    const metadataFileName = `Metadata-${srn}-${achievement}.json`;
                     const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
                     const metadataUri = `ipfs://${metadataCid}`;
 
@@ -323,8 +330,11 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     const newRecord = {
                         studentName,
                         srn,
-                        event,
+                        event: achievement,
+                        achievement,
                         date,
+                        projectDescription: projectDescription || "",
+                        studentEmail: studentEmail || "",
                         mintedAt: new Date(),
                         transactionHash: txHash,
                         recipientAddress: universityWallet,
@@ -337,7 +347,7 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     results.push({
                         studentName,
                         srn,
-                        event,
+                        event: achievement,
                         status: "success",
                         transactionHash: txHash,
                         imageUrl: newRecord.imageUrl
@@ -347,6 +357,7 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     console.error(`Failed to mint certificate for student ${i}:`, error);
                     
                     // Add failed certificate to retry queue
+                    const values = lines[i].split(",").map(v => v.trim());
                     const failedRecord = {
                         studentName: values[0] || "Unknown",
                         srn: values[1] || "Unknown", 

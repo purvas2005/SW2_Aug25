@@ -1,10 +1,10 @@
-studentName,srn,event,date,
-Varsha,PES1UG21CS001,Hackathon Winner,Oct-16,2025
-Ananya,PES1UG21CS002,Hackathon Winner,Oct-16,2025
-Yash Gupta,PES1UG21CS003,Hackathon Winner,Oct-16,2025
-Rahul,PES1UG21CS004,Innovation Award,Oct-17,2025
-Priya,PES1UG21CS005,Innovation Award,Oct-17,2025
-Arjun,PES1UG21CS006,Innovation Award,Oct-17,2025
-Manasa,PES1UG23EC123,Hackathon Winner,Nov-05,2025
-Pratyush,PES1UG23CS266,Innovation Award,Jun-26,2025
-Pratyush,PES1UG23CS267,Hackathon Winner,Jul-26,2025
+studentName,srn,achievement,date,projectDescription,studentEmail
+Varsha Nadig,PES1UG21CS001,Best Innovator,Oct-16-2025, Crowd Surveillance App,varshanadig04@gmail.com
+Ananya Shenoy,PES1UG21CS002,Best Innovator,Oct-16-2025, Crowd Surveillance App,PES1UG21CS002@gmail.com
+Yash Gupta,PES1UG21CS003,Best Innovator,Oct-16-2025, Crowd Surveillance App,yashmt2005@gmail.com
+Rahul Jaikrishna,PES1UG21CS004,Winner,Oct-17-2025, Bioluminiscent Lamps,PES1UG21CS004@gmail.com
+Priyanka Satish,PES1UG21CS005,First Runner Up,Oct-17-2025, AR-VR Based Robot,priyankas@gmail.com
+Arjun Sharma,PES1UG21CS006,Second Runner Up,Oct-17-2025, Subscription Box for Indian Snacks,PES1UG21CS006@gmail.com
+Manasa Ajit,PES1UG23EC123,Best Pitcher,Nov-05-2025, ML Model to detect spam,PES1UG23EC123@gmail.com
+Pratyush Mishra,PES1UG23CS266,Best at Finance,Jun-26-2025, Food Startup,mishra.pratyush@gmail.com
+Purva Sharma,PES1UG23CS267,Most Feasible,Jul-26-2025, Lake Health Monitor,spurva449@gmail.com
