@@ -4,11 +4,11 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const { generateCertificate } = require("./services/certificate");
-const { uploadBufferToPinata, uploadJsonToPinata } = require("./services/pinata");
-const { mintCertificateNft, verifyTransaction } = require("./services/polygon"); // --- New: Import verifyTransaction ---
-const { connectDB, saveCertificateRecord, findCertificateBySrn, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue } = require("./services/database"); // --- New: Import retry queue functions ---
-
+const { verifyTransaction } = require("./services/polygon"); // --- New: Import verifyTransaction ---
+// We import our main function from the pinning-service
+const { mintAndPinCertificate } = require("./services/pinning-service");
+// We still need the other services for non-minting endpoints
+const { connectDB, saveCertificateRecord, findCertificateBySrn, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
 const app = express();
 const PORT = process.env.PORT || 5001;
 
@@ -23,52 +23,17 @@ app.get("/", (req, res) => {
 
 app.post("/api/mint", async (req, res) => {
   try {
-    const { studentName, srn, event, date } = req.body;
+    const { studentName, srn, achievement, date, projectDescription, studentEmail } = req.body;
     const universityWallet = process.env.COMMON_WALLET_ADDRESS;
 
-    if (!studentName || !srn || !event || !date) {
+    if (!studentName || !srn || !achievement || !date) {
       return res.status(400).json({ error: "Missing required student fields." });
     }
     if (!universityWallet) {
         return res.status(500).json({ error: "Server configuration error: Common wallet address is not set." });
     }
 
-    const certificateBuffer = await generateCertificate(studentName, srn, event, date, null); 
-    const imageFileName = `Certificate-${srn}-${event}.png`;
-    const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
-    const imageUrl = `ipfs://${imageCid}`;
-
-    const metadata = {
-      name: `Certificate: ${event} - ${studentName}`,
-      description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
-      image: imageUrl,
-      attributes: [
-        { trait_type: "Student Name", value: studentName },
-        { trait_type: "SRN", value: srn },
-        { trait_type: "Event", value: event },
-        { trait_type: "Date", value: date },
-      ],
-    };
-
-    const metadataFileName = `Metadata-${srn}-${event}.json`;
-    const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
-    const metadataUri = `ipfs://${metadataCid}`;
-
-    const txHash = await mintCertificateNft(universityWallet, metadataUri);
-
-    const newRecord = {
-      studentName,
-      srn,
-      event,
-      date,
-      mintedAt: new Date(),
-      transactionHash: txHash,
-      recipientAddress: universityWallet,
-      metadataUri: metadataUri,
-      imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
-    };
-    
-    await saveCertificateRecord(newRecord);
+    const newRecord = await mintAndPinCertificate(req.body, universityWallet);
 
     res.status(200).json({
       message: "Certificate minted and record saved to database successfully!",
@@ -271,9 +236,9 @@ app.post("/api/mint-all-badges", async (req, res) => {
                         student[header] = values[index] || "";
                     });
 
-                    const { studentName, srn, event, date } = student;
+                    const { studentName, srn, achievement, date, projectDescription, studentEmail } = student;
 
-                    if (!studentName || !srn || !event || !date) {
+                    if (!studentName || !srn || !achievement || !date) {
                         results.push({
                             studentName: studentName || "Unknown",
                             srn: srn || "Unknown",
@@ -285,11 +250,11 @@ app.post("/api/mint-all-badges", async (req, res) => {
 
                     // Check if certificate already exists
                     const existingRecord = await findCertificateBySrn(srn);
-                    if (existingRecord && existingRecord.event === event) {
+                    if (existingRecord && existingRecord.event === achievement) {
                         results.push({
                             studentName,
                             srn,
-                            event,
+                            event: achievement,
                             status: "skipped",
                             message: "Certificate already exists"
                         });
@@ -297,49 +262,17 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     }
 
                     // Generate and mint certificate
-                    const certificateBuffer = await generateCertificate(studentName, srn, event, date, null);
-                    const imageFileName = `Certificate-${srn}-${event}.png`;
-                    const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
-                    const imageUrl = `ipfs://${imageCid}`;
+                    // --- ✅ Call the new service ---
+                    const newRecord = await mintAndPinCertificate(student, universityWallet);
 
-                    const metadata = {
-                        name: `Certificate: ${event} - ${studentName}`,
-                        description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
-                        image: imageUrl,
-                        attributes: [
-                            { trait_type: "Student Name", value: studentName },
-                            { trait_type: "SRN", value: srn },
-                            { trait_type: "Event", value: event },
-                            { trait_type: "Date", value: date },
-                        ],
-                    };
-
-                    const metadataFileName = `Metadata-${srn}-${event}.json`;
-                    const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
-                    const metadataUri = `ipfs://${metadataCid}`;
-
-                    const txHash = await mintCertificateNft(universityWallet, metadataUri);
-
-                    const newRecord = {
-                        studentName,
-                        srn,
-                        event,
-                        date,
-                        mintedAt: new Date(),
-                        transactionHash: txHash,
-                        recipientAddress: universityWallet,
-                        metadataUri: metadataUri,
-                        imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
-                    };
-
-                    await saveCertificateRecord(newRecord);
-
+                    // (The 'results.push' logic below this line stays the same, 
+                    //  but it must use the 'newRecord' for txHash and imageUrl)
                     results.push({
-                        studentName,
-                        srn,
-                        event,
+                        studentName: newRecord.studentName,
+                        srn: newRecord.srn,
+                        event: newRecord.achievement,
                         status: "success",
-                        transactionHash: txHash,
+                        transactionHash: newRecord.transactionHash,
                         imageUrl: newRecord.imageUrl
                     });
 
@@ -347,6 +280,7 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     console.error(`Failed to mint certificate for student ${i}:`, error);
                     
                     // Add failed certificate to retry queue
+                    const values = lines[i].split(",").map(v => v.trim());
                     const failedRecord = {
                         studentName: values[0] || "Unknown",
                         srn: values[1] || "Unknown", 
@@ -464,50 +398,18 @@ const processRetryQueue = async () => {
             }
 
             // Attempt to mint the certificate
-            const certificateBuffer = await generateCertificate(studentName, srn, event, date, null);
-            const imageFileName = `Certificate-${srn}-${event}.png`;
-            const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
-            const imageUrl = `ipfs://${imageCid}`;
-
-            const metadata = {
-                name: `Certificate: ${event} - ${studentName}`,
-                description: `This certificate is awarded to ${studentName} for participation in the ${event} on ${date}.`,
-                image: imageUrl,
-                attributes: [
-                    { trait_type: "Student Name", value: studentName },
-                    { trait_type: "SRN", value: srn },
-                    { trait_type: "Event", value: event },
-                    { trait_type: "Date", value: date },
-                ],
-            };
-
-            const metadataFileName = `Metadata-${srn}-${event}.json`;
-            const metadataCid = await uploadJsonToPinata(metadata, metadataFileName);
-            const metadataUri = `ipfs://${metadataCid}`;
-
-            const txHash = await mintCertificateNft(universityWallet, metadataUri);
-
-            const newRecord = {
-                studentName,
-                srn,
-                event,
-                date,
-                mintedAt: new Date(),
-                transactionHash: txHash,
-                recipientAddress: universityWallet,
-                metadataUri: metadataUri,
-                imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
-            };
-
-            await saveCertificateRecord(newRecord);
+            // --- ✅ Call the new service ---
+            // Map 'event' to 'achievement' which the service expects
+            const studentData = { ...item, achievement: item.event };
+            const newRecord = await mintAndPinCertificate(studentData, universityWallet);
             await removeFromRetryQueue(_id);
 
             results.push({
-                studentName,
-                srn,
-                event,
+                studentName: newRecord.studentName,
+                srn: newRecord.srn,
+                event: newRecord.achievement,
                 status: "success",
-                transactionHash: txHash,
+                transactionHash: newRecord.transactionHash,
                 message: "Successfully minted on retry"
             });
 
