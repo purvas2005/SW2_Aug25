@@ -22,9 +22,10 @@ try {
 
 // --- YOUR TEST DATA ---
 const TEST_NAME = "Purva Sharma";
-const TEST_SRN = "PES12345678";
+const TEST_SRN = "PES12345678"; // This is used for the "team name" field in your code
 const TEST_EVENT = "CIE Spark 2025 Workshop";
 const TEST_DATE = "November 5, 2025";
+const TEST_PROJECT_DESC = "A novel approach to real-time resource monitoring using serverless functions. The project dealt with a bunch of shenanigans and tomfoolery which could go on and on."; // <<< ADDED
 const TEST_QR_DATA = "https://example.com/verify/PES12345678";
 
 // --- 3. PATH FIX ---
@@ -36,13 +37,14 @@ const runTest = async () => {
   try {
     console.log("Generating certificate with test data...");
     
-    // Call your function
+    // Call your function with the correct 6 arguments
     const certificateBuffer = await generateCertificate(
       TEST_NAME,
       TEST_SRN,
       TEST_EVENT,
       TEST_DATE,
-      TEST_QR_DATA
+      TEST_PROJECT_DESC, // <<< CHANGED
+      TEST_QR_DATA       // <<< CHANGED
     );
 
     // Save the buffer to a file
