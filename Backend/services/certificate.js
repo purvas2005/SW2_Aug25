@@ -15,10 +15,8 @@ const generateCertificate = async (name, srn, achievement, date, projectDescript
 
     const canvas = createCanvas(image.width, image.height);
     const ctx = canvas.getContext("2d");  
-    
-    // --- Use actual dimensions from your test output ---
-    const W = 3369; // canvas.width
-    const H = 2381; // canvas.height
+    const W = canvas.width;  // Width based on template
+    const H = canvas.height; // Height based on template
 
     console.log(`Canvas dimensions: ${W} x ${H}`);
 
@@ -29,26 +27,31 @@ const generateCertificate = async (name, srn, achievement, date, projectDescript
     ctx.textAlign = "center";
 
     // === STUDENT NAME (Large, Gold/Yellow Color) ===
-    ctx.font = "bold 235px Inter, Sans-serif"; 
+    ctx.font = "bold 140px Inter, Sans-serif"; 
     ctx.fillStyle = "#C8A361"; // Gold color for name
-    ctx.fillText(name.toUpperCase(), 1684.5, 1166.685); // Original: W / 2, H * 0.385
+    ctx.fillText(name.toUpperCase(), W / 2, H * 0.385);
 
     // === TEAM NAME (appears in "of [Team Name] for") ===
     ctx.font = "bold 48px Inter, Sans-serif";
     ctx.fillStyle = "#3E4E6C"; // Navy blue
-    ctx.fillText(srn, 1684.5, 1265.26); // Original: W / 2, H * 0.46
+    ctx.fillText(srn, W / 2, H * 0.46); // Using SRN field for team name
 
     // === EVENT NAME (CIE Spark 2025) ===
     ctx.font = "bold 52px Inter, Sans-serif";
     ctx.fillStyle = "#2C3E50"; // Dark blue
-    ctx.fillText(achievement, 2284.5, 1370.12); // Original: W / 2, H * 0.52
+    ctx.fillText(achievement, W / 2, H * 0.52);
+
+    // === VALIDATION TEXT ===
+    ctx.font = "38px Inter, Sans-serif";
+    ctx.fillStyle = "#555555";
+    ctx.fillText("validating the problem statement", W / 2, H * 0.56);
 
     // === PROJECT DESCRIPTION (Two lines) ===
     if (projectDescription && projectDescription.trim()) {
-      ctx.font = "bold 43px Inter, Sans-serif";
+      ctx.font = "bold 40px Inter, Sans-serif";
       ctx.fillStyle = "#3E4E6C"; // Navy blue
       
-      const maxWidth = 1650; // Original: W * 0.7
+      const maxWidth = W * 0.7;
       const words = projectDescription.trim().split(' ');
       let line = '';
       let lines = [];
@@ -70,23 +73,44 @@ const generateCertificate = async (name, srn, achievement, date, projectDescript
       }
       
       // Draw lines with underline effect
-      const lineHeight = 85;
-      const startY = 1720; // Original: H * 0.625
+      const lineHeight = 55;
+      const startY = H * 0.625;
       
       lines.forEach((textLine, index) => {
         const yPos = startY + (index * lineHeight);
-        ctx.fillText(textLine, 1684.5, yPos); // Original: W / 2, yPos
+        ctx.fillText(textLine, W / 2, yPos);
+        
+        // Draw underline for each line
+        const textWidth = ctx.measureText(textLine).width;
+        ctx.beginPath();
+        ctx.strokeStyle = "#3E4E6C";
+        ctx.lineWidth = 2;
+        ctx.moveTo((W / 2) - (textWidth / 2), yPos + 8);
+        ctx.lineTo((W / 2) + (textWidth / 2), yPos + 8);
+        ctx.stroke();
       });
     }
+
+    // === SIGNATURE SECTION ===
+    // Director name and title
+    // ctx.font = "bold 38px Inter, Sans-serif";
+    // ctx.fillStyle = "#2C3E50";
+    // ctx.textAlign = "right";
+    // ctx.fillText("Sathya Prasad", W * 0.83, H * 0.82);
+    
+    // ctx.font = "32px Inter, Sans-serif";
+    // ctx.fillStyle = "#555555";
+    // ctx.fillText("Director, CIE", W * 0.83, H * 0.855);
+
     // === DATE (Bottom Center) ===
     ctx.fillStyle = "#555555";
     ctx.textAlign = "center";
-    ctx.font = "38px Inter, Sans-serif";
-    ctx.fillText(date, 1684.5, 2340.52); // Original: W / 2, H * 0.92
+    ctx.font = "32px Inter, Sans-serif";
+    ctx.fillText(date, W / 2, H * 0.92);
 
     // === QR CODE (Bottom Right) ===
     if (qrCodeData) {
-      const qrSize = 400;
+      const qrSize = 200;
       const qrImage = await QRCode.toDataURL(qrCodeData, { 
           width: qrSize,
           margin: 1,
@@ -95,8 +119,8 @@ const generateCertificate = async (name, srn, achievement, date, projectDescript
       const qrDraw = await loadImage(qrImage);
       
       // Position QR code at bottom right
-      const qrX = 2834.72; // Original: W * 0.88
-      const qrY = 1849.56; // Original: H * 0.76
+      const qrX = W * 0.88;
+      const qrY = H * 0.76;
       
       ctx.drawImage(qrDraw, qrX, qrY, qrSize, qrSize);
     }

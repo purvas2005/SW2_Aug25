@@ -268,9 +268,9 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     // (The 'results.push' logic below this line stays the same, 
                     //  but it must use the 'newRecord' for txHash and imageUrl)
                     results.push({
-                        studentName: newRecord.studentName,
-                        srn: newRecord.srn,
-                        event: newRecord.achievement,
+                        studentName,
+                        srn,
+                        event: achievement,
                         status: "success",
                         transactionHash: newRecord.transactionHash,
                         imageUrl: newRecord.imageUrl
