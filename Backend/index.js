@@ -2,11 +2,14 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { ethers } = require("ethers");
+const nodemailer = require("nodemailer");
 const fs = require("fs");
 const path = require("path");
 const { verifyTransaction } = require("./services/polygon"); // --- New: Import verifyTransaction ---
 // We import our main function from the pinning-service
 const { mintAndPinCertificate } = require("./services/pinning-service");
+const { sendCertificateEmail } = require("./services/email");
 // We still need the other services for non-minting endpoints
 const { connectDB, saveCertificateRecord, findCertificateBySrn, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
 const app = express();
@@ -39,6 +42,16 @@ app.post("/api/mint", async (req, res) => {
       message: "Certificate minted and record saved to database successfully!",
       ...newRecord
     });
+
+  // send email (non-blocking for API response but we await to log any failure)
+    if (newRecord && newRecord.studentEmail) {
+    try {
+        await sendCertificateEmail(newRecord.studentEmail, newRecord);
+        console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+    } catch (err) {
+        console.error(`❌ Failed to send email to ${newRecord.studentEmail}:`, err);
+    }
+    }
 
   } catch (error) {
     console.error("--- MINTING PROCESS FAILED ---");
@@ -276,6 +289,16 @@ app.post("/api/mint-all-badges", async (req, res) => {
                         imageUrl: newRecord.imageUrl
                     });
 
+                    // Send email to student if email exists (catch errors so loop continues)
+                    if (newRecord && newRecord.studentEmail) {
+                    try {
+                        await sendCertificateEmail(newRecord.studentEmail, newRecord);
+                        console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+                    } catch (err) {
+                        console.error(`❌ Email failed for ${newRecord.studentEmail}:`, err);
+                    }
+                    }
+
                 } catch (error) {
                     console.error(`Failed to mint certificate for student ${i}:`, error);
                     
@@ -413,6 +436,16 @@ const processRetryQueue = async () => {
                 message: "Successfully minted on retry"
             });
 
+            // Attempt to email student on successful retry-mint
+            if (newRecord && newRecord.studentEmail) {
+            try {
+                await sendCertificateEmail(newRecord.studentEmail, newRecord);
+                console.log(`✅ Retry email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+            } catch (err) {
+                console.error(`❌ Retry email failed for ${newRecord.studentEmail}:`, err);
+            }
+            }
+
         } catch (error) {
             console.error(`Retry failed for ${item.studentName} (${item.srn}):`, error);
             
@@ -467,3 +500,41 @@ const startServer = async () => {
 };
 
 startServer();
+
+
+/* 
+// --- TEST EMAIL ENDPOINT (NO MINTING, JUST EMAIL) ---
+app.post("/api/test-email", async (req, res) => {
+    try {
+        const { studentEmail } = req.body;
+
+        if (!studentEmail) {
+            return res.status(400).json({ error: "Missing studentEmail in body." });
+        }
+
+        // Fake certificate data, good enough for email rendering
+        const mockRecord = {
+            studentName: "Test Student",
+            srn: "TEST999",
+            achievement: "Test Achievement",
+            event: "Mock Event",
+            date: "Jan-01-2025",
+            projectDescription: "This is a mock project description.",
+            imageUrl: "https://via.placeholder.com/600x400.png?text=Test+Certificate"
+        };
+
+        const { sendCertificateEmail } = require("./services/email");
+
+        await sendCertificateEmail(studentEmail, mockRecord);
+
+        res.status(200).json({
+            message: "Test email sent successfully!",
+            to: studentEmail,
+            dataUsed: mockRecord
+        });
+    } catch (error) {
+        console.error("❌ Test email failed:", error);
+        res.status(500).json({ error: "Failed to send test email." });
+    }
+});
+*/
