@@ -7,7 +7,7 @@ const path = require("path");
 const fontPath = path.join(__dirname, '..', 'assets', 'Inter-Regular.ttf');
 registerFont(fontPath, { family: 'Inter' });
 
-const generateCertificate = async (name, srn, achievement, date, projectDescription, qrCodeData) => {
+const generateCertificate = async (name, teamName, achievement, date, projectDescription, qrCodeData) => {
   try {
     // Use the PNG template
     const templatePath = path.join(__dirname, '..', 'assets', 'certificate_template.png');
@@ -34,14 +34,14 @@ const generateCertificate = async (name, srn, achievement, date, projectDescript
     ctx.fillText(name.toUpperCase(), 1684.5, 1166.685); // Original: W / 2, H * 0.385
 
     // === TEAM NAME (appears in "of [Team Name] for") ===
-    ctx.font = "bold 48px Inter, Sans-serif";
-    ctx.fillStyle = "#3E4E6C"; // Navy blue
-    ctx.fillText(srn, 1684.5, 1265.26); // Original: W / 2, H * 0.46
+    ctx.font = "bold 52px Inter, Sans-serif";
+    ctx.fillStyle = "#2C3E50"; // Navy blue
+    ctx.fillText(teamName, 1084.5, 1370.12); 
 
-    // === EVENT NAME (CIE Spark 2025) ===
+    // === Achievement (CIE Spark 2025) ===
     ctx.font = "bold 52px Inter, Sans-serif";
     ctx.fillStyle = "#2C3E50"; // Dark blue
-    ctx.fillText(achievement, 2284.5, 1370.12); // Original: W / 2, H * 0.52
+    ctx.fillText(achievement, 2284.5, 1370.12); 
 
     // === PROJECT DESCRIPTION (Two lines) ===
     if (projectDescription && projectDescription.trim()) {
@@ -101,7 +101,7 @@ const generateCertificate = async (name, srn, achievement, date, projectDescript
       ctx.drawImage(qrDraw, qrX, qrY, qrSize, qrSize);
     }
     
-    console.log(`✅ Certificate generated for ${name} (${srn}) - ${achievement}`);
+    console.log(`✅ Certificate generated for ${name} (${teamName}) - ${achievement}`);
     
     return canvas.toBuffer("image/png");
   } catch (error) {

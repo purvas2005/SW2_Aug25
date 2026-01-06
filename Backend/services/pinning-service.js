@@ -5,20 +5,19 @@ const { mintCertificateNft } = require("./polygon");
 const { saveCertificateRecord } = require("./database");
 
 /**
- * Orchestrates the entire 9-step certificate minting process.
+ * Orchestrates the entire certificate minting process using teamName (SRN removed).
  */
 async function mintAndPinCertificate(data, universityWallet) {
-  // Destructure all needed data
-  const { studentName, srn, achievement, date, projectDescription, studentEmail } = data;
+  const { studentName, teamName, achievement, date, projectDescription, studentEmail } = data;
 
   // --- Step 1: Create DRAFT metadata (with empty image link) ---
   const draftMetadata = {
     name: `Certificate: ${achievement} - ${studentName}`,
     description: `This certificate is awarded to ${studentName} for ${achievement} on ${date}. Project: ${projectDescription || 'N/A'}`,
-    image: "", // Image is empty for now
+    image: "",
     attributes: [
       { trait_type: "Student Name", value: studentName },
-      { trait_type: "SRN", value: srn },
+      { trait_type: "Team Name", value: teamName },
       { trait_type: "Achievement", value: achievement },
       { trait_type: "Date", value: date },
       { trait_type: "Project Description", value: projectDescription || "" },
@@ -27,56 +26,55 @@ async function mintAndPinCertificate(data, universityWallet) {
   };
 
   // --- Step 2: Pin DRAFT metadata ---
-  const draftMetadataFileName = `Draft-Metadata-${srn}-${achievement}.json`;
+  const draftMetadataFileName = `Draft-Metadata-${teamName}-${achievement}.json`;
   const draftMetadataCid = await uploadJsonToPinata(draftMetadata, draftMetadataFileName);
-  
-  // --- ✅ FIX: Create TWO URLs ---
-  const draftMetadataUrl = `ipfs://${draftMetadataCid}`; // <-- This is for the FINAL metadata's 'image' field
-  const qrCodeUrl = `https://gateway.pinata.cloud/ipfs/${draftMetadataCid}`; // <-- This is for the scannable QR Code
 
-  // --- Step 3: Generate the certificate with the public QR code URL ---
+  const draftMetadataUrl = `ipfs://${draftMetadataCid}`;
+  const qrCodeUrl = `https://gateway.pinata.cloud/ipfs/${draftMetadataCid}`;
+
+  // --- Step 3: Generate the certificate image ---
   const certificateBuffer = await generateCertificate(
-    studentName, 
-    srn, 
-    achievement, 
-    date, 
-    projectDescription, 
-    qrCodeUrl // <-- ✅ CHANGED: Pass the public URL
-  ); 
+    studentName,
+    teamName,
+    achievement,
+    date,
+    projectDescription,
+    qrCodeUrl
+  );
 
   // --- Step 4: Pin the certificate image ---
-  const imageFileName = `Certificate-${srn}-${achievement}.png`;
+  const imageFileName = `Certificate-${teamName}-${achievement}.png`;
   const imageCid = await uploadBufferToPinata(certificateBuffer, imageFileName);
-  const imageUrl = `ipfs://${imageCid}`; // The final image URL
+  const imageUrl = `ipfs://${imageCid}`;
 
   // --- Step 5: Create FINAL metadata (now with the correct image URL) ---
   const finalMetadata = {
-      ...draftMetadata, // Start with the draft
-      image: imageUrl    // Update the image field
+      ...draftMetadata,
+      image: imageUrl
   };
 
   // --- Step 6: Pin the FINAL metadata ---
-  const metadataFileName = `Metadata-${srn}-${achievement}.json`;
+  const metadataFileName = `Metadata-${teamName}-${achievement}.json`;
   const metadataCid = await uploadJsonToPinata(finalMetadata, metadataFileName);
-  const metadataUri = `ipfs://${metadataCid}`; // This is the final token URI
+  const metadataUri = `ipfs://${metadataCid}`;
 
   // --- Step 7: Mint the NFT ---
   const txHash = await mintCertificateNft(universityWallet, metadataUri);
 
-  // --- Step 8: Create the database record (This is where the txHash is stored) ---
+  // --- Step 8: Create the database record (SRN removed) ---
   const newRecord = {
     studentName,
-    srn,
+    teamName,
     achievement,
-    event: achievement, 
+    event: achievement,
     date,
     projectDescription: projectDescription || "",
     studentEmail: studentEmail || "",
     mintedAt: new Date(),
-    transactionHash: txHash, // <-- Stored correctly in the DB
+    transactionHash: txHash,
     recipientAddress: universityWallet,
     metadataUri: metadataUri,
-    imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`, 
+    imageUrl: `https://gateway.pinata.cloud/ipfs/${imageCid}`,
   };
   
   // --- Step 9: Save the record ---
@@ -85,5 +83,4 @@ async function mintAndPinCertificate(data, universityWallet) {
   return newRecord;
 }
 
-// Export the main function so index.js can import it
 module.exports = { mintAndPinCertificate };
