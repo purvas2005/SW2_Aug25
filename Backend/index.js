@@ -2,10 +2,13 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const { ethers } = require("ethers");
+const nodemailer = require("nodemailer");
 const fs = require("fs");
 const path = require("path");
 const { verifyTransaction } = require("./services/polygon");
 const { mintAndPinCertificate } = require("./services/pinning-service");
+const { sendCertificateEmail } = require("./services/email");
 // Update imports to use teamName-based lookup
 const { connectDB, saveCertificateRecord, findCertificateByTeamName, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
 const app = express();
@@ -41,6 +44,18 @@ app.post("/api/mint", async (req, res) => {
       message: "Certificate minted and record saved to database successfully!",
       ...newRecord
     });
+
+    // send email (non-blocking for API response but we await to log any failure)
+
+
+    if (newRecord && newRecord.studentEmail) {
+        try {
+            await sendCertificateEmail(newRecord.studentEmail, newRecord);
+            console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+        } catch (err) {
+            console.error(`❌ Failed to send email to ${newRecord.studentEmail}:`, err);
+        }  
+        }
 
   } catch (error) {
     console.error("--- MINTING PROCESS FAILED ---");
@@ -280,9 +295,21 @@ app.post("/api/mint-all-badges", async (req, res) => {
                         imageUrl: newRecord.imageUrl
                     });
 
+
+                    // Send email to student if email exists (catch errors so loop continues)
+
+
+                    if (newRecord && newRecord.studentEmail) {
+                        try {
+                          await sendCertificateEmail(newRecord.studentEmail, newRecord);
+                          console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+                        } catch (err) {
+                            console.error(`❌ Email failed for ${newRecord.studentEmail}:`, err);
+                        }
+                        }
+
                 } catch (error) {
-                    console.error(`Failed to mint certificate for student ${i}:`, error);
-                    
+                    console.error(`Failed to mint certificate for student ${i}:`, error); 
                     // Add failed certificate to retry queue
                     const values = lines[i].split(",").map(v => v.trim());
                     const failedRecord = {
