@@ -48,15 +48,20 @@ const saveCertificateRecord = async (record) => {
     }
 };
 
-const findCertificateBySrn = async (srn) => {
+/**
+ * Finds a certificate record by teamName with a fallback to srn for backward compatibility.
+ * @param {string} teamName - The team name to search for.
+ * @returns {Promise<object|null>} The certificate record or null if not found.
+ */
+const findCertificateByTeamName = async (teamName) => {
     if (!db) {
         throw new Error("Database not connected.");
     }
     try {
         const collection = db.collection("certificates");
-        // Use findOne for an efficient lookup
-        const record = await collection.findOne({ srn: srn });
-        return record;
+        const record = await collection.findOne({ teamName: teamName });
+        // Fallback: support old records that may have only 'srn'
+        return record || await collection.findOne({ srn: teamName });
     } catch (error) {
         console.error("❌ Error finding record in MongoDB", error);
         throw new Error("Failed to query the database.");
@@ -186,7 +191,7 @@ const removeFromRetryQueue = async (id) => {
 module.exports = { 
     connectDB, 
     saveCertificateRecord, 
-    findCertificateBySrn, 
+    findCertificateByTeamName, 
     getAllCertificates,
     addToRetryQueue,
     getRetryQueueItems,

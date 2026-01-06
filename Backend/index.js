@@ -4,11 +4,10 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
-const { verifyTransaction } = require("./services/polygon"); // --- New: Import verifyTransaction ---
-// We import our main function from the pinning-service
+const { verifyTransaction } = require("./services/polygon");
 const { mintAndPinCertificate } = require("./services/pinning-service");
-// We still need the other services for non-minting endpoints
-const { connectDB, saveCertificateRecord, findCertificateBySrn, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
+// Update imports to use teamName-based lookup
+const { connectDB, saveCertificateRecord, findCertificateByTeamName, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
 const app = express();
 const PORT = process.env.PORT || 5001;
 
@@ -23,17 +22,20 @@ app.get("/", (req, res) => {
 
 app.post("/api/mint", async (req, res) => {
   try {
-    const { studentName, srn, achievement, date, projectDescription, studentEmail } = req.body;
+    const { studentName, teamName, achievement, date, projectDescription, studentEmail } = req.body;
     const universityWallet = process.env.COMMON_WALLET_ADDRESS;
 
-    if (!studentName || !srn || !achievement || !date) {
+    if (!studentName || !teamName || !achievement || !date) {
       return res.status(400).json({ error: "Missing required student fields." });
     }
     if (!universityWallet) {
         return res.status(500).json({ error: "Server configuration error: Common wallet address is not set." });
     }
 
-    const newRecord = await mintAndPinCertificate(req.body, universityWallet);
+    // Map teamName to srn for backward compatibility with services/database expecting SRN
+    const payload = { ...req.body, srn: teamName };
+
+    const newRecord = await mintAndPinCertificate(payload, universityWallet);
 
     res.status(200).json({
       message: "Certificate minted and record saved to database successfully!",
@@ -59,7 +61,9 @@ app.get("/api/certificates", async (req, res) => {
         // Transform the data to match frontend expectations
         const transformedCertificates = certificates.map(cert => ({
             _id: cert._id,
-            srn: cert.srn,
+            // Expose teamName if present, else fall back to srn
+            teamName: cert.teamName || cert.srn,
+            srn: undefined, // no longer considering srn in responses
             eventName: cert.event, // Map 'event' to 'eventName'
             certificateUrl: cert.imageUrl,
             studentName: cert.studentName,
@@ -78,21 +82,22 @@ app.get("/api/certificates", async (req, res) => {
     }
 });
 
-// --- ✅ New Endpoint to Get Certificate by SRN and Event ---
+// --- ✅ New Endpoint to Get Certificate by teamName and Event ---
 /**
- * Retrieves a specific certificate by SRN and event name
+ * Retrieves a specific certificate by teamName and event name
  */
-app.get("/api/certificate/:srn/:eventName", async (req, res) => {
+app.get("/api/certificate/:teamName/:eventName", async (req, res) => {
     try {
-        const { srn, eventName } = req.params;
+        const { teamName, eventName } = req.params;
         const { getAllCertificates } = require("./services/database");
         const certificates = await getAllCertificates();
         
-        // Find certificate by matching SRN and normalized event name
+        // Find certificate by matching teamName and normalized event name
         const foundCertificate = certificates.find(cert => {
             const normalizedDbEventName = cert.event.replace(/\s+/g, '').toLowerCase();
             const normalizedRequestEventName = eventName.toLowerCase();
-            return cert.srn === srn && normalizedDbEventName === normalizedRequestEventName;
+            const identifier = cert.teamName || cert.srn; // support existing data
+            return identifier === teamName && normalizedDbEventName === normalizedRequestEventName;
         });
         
         if (!foundCertificate) {
@@ -102,7 +107,7 @@ app.get("/api/certificate/:srn/:eventName", async (req, res) => {
         // Transform the data to match frontend expectations
         const transformedCertificate = {
             _id: foundCertificate._id,
-            srn: foundCertificate.srn,
+            teamName: foundCertificate.teamName || foundCertificate.srn,
             eventName: foundCertificate.event,
             certificateUrl: foundCertificate.imageUrl,
             studentName: foundCertificate.studentName,
@@ -124,14 +129,14 @@ app.get("/api/certificate/:srn/:eventName", async (req, res) => {
 // --- ✅ New Verification Endpoint ---
 /**
  * Verifies a certificate's authenticity by checking its transaction on the blockchain.
- * Uses SRN as a URL parameter. Example: /api/verify/PES1UG21CS999
+ * Uses teamName as a URL parameter. Example: /api/verify/Team-Alpha
  */
-app.get("/api/verify/:srn", async (req, res) => {
+app.get("/api/verify/:teamName", async (req, res) => {
     try {
-        const { srn } = req.params;
+        const { teamName } = req.params;
 
-        // 1. Find the certificate record in our database
-        const record = await findCertificateBySrn(srn);
+        // 1. Find the certificate record in our database (map teamName to existing teamName-based lookup)
+        const record = await findCertificateByTeamName(teamName);
 
         if (!record) {
             return res.status(404).json({
@@ -236,24 +241,24 @@ app.post("/api/mint-all-badges", async (req, res) => {
                         student[header] = values[index] || "";
                     });
 
-                    const { studentName, srn, achievement, date, projectDescription, studentEmail } = student;
+                    const { studentName, teamName, achievement, date, projectDescription, studentEmail } = student;
 
-                    if (!studentName || !srn || !achievement || !date) {
+                    if (!studentName || !teamName || !achievement || !date) {
                         results.push({
                             studentName: studentName || "Unknown",
-                            srn: srn || "Unknown",
+                            teamName: teamName || "Unknown",
                             status: "failed",
                             error: "Missing required fields"
                         });
                         continue;
                     }
 
-                    // Check if certificate already exists
-                    const existingRecord = await findCertificateBySrn(srn);
+                    // Check if certificate already exists (using teamName as identifier)
+                    const existingRecord = await findCertificateByTeamName(teamName);
                     if (existingRecord && existingRecord.event === achievement) {
                         results.push({
                             studentName,
-                            srn,
+                            teamName,
                             event: achievement,
                             status: "skipped",
                             message: "Certificate already exists"
@@ -262,15 +267,14 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     }
 
                     // Generate and mint certificate
-                    // --- ✅ Call the new service ---
-                    const newRecord = await mintAndPinCertificate(student, universityWallet);
+                    // Map teamName to srn for backward compatibility
+                    const payload = { ...student, srn: teamName };
+                    const newRecord = await mintAndPinCertificate(payload, universityWallet);
 
-                    // (The 'results.push' logic below this line stays the same, 
-                    //  but it must use the 'newRecord' for txHash and imageUrl)
                     results.push({
-                        studentName,
-                        srn,
-                        event: achievement,
+                        studentName: newRecord.studentName,
+                        teamName: payload.teamName || teamName,
+                        event: newRecord.achievement,
                         status: "success",
                         transactionHash: newRecord.transactionHash,
                         imageUrl: newRecord.imageUrl
@@ -283,7 +287,7 @@ app.post("/api/mint-all-badges", async (req, res) => {
                     const values = lines[i].split(",").map(v => v.trim());
                     const failedRecord = {
                         studentName: values[0] || "Unknown",
-                        srn: values[1] || "Unknown", 
+                        teamName: values[1] || "Unknown", 
                         event: values[2] || "Unknown",
                         date: values[3] || "Unknown",
                         error: error.message
@@ -339,9 +343,11 @@ app.post("/api/mint-all-badges", async (req, res) => {
 app.get("/api/retry-queue", async (req, res) => {
     try {
         const queueItems = await getRetryQueueItems();
+        // Normalize items to include teamName field
+        const items = queueItems.map(item => ({ ...item, teamName: item.teamName || item.srn }));
         res.status(200).json({
-            queueLength: queueItems.length,
-            items: queueItems
+            queueLength: items.length,
+            items
         });
     } catch (error) {
         console.error("Failed to fetch retry queue:", error);
@@ -381,15 +387,15 @@ const processRetryQueue = async () => {
 
     for (const item of queueItems) {
         try {
-            const { studentName, srn, event, date, _id } = item;
+            const { studentName, teamName, event, date, _id } = { ...item, teamName: item.teamName || item.srn };
 
             // Check if certificate was created since adding to queue
-            const existingRecord = await findCertificateBySrn(srn);
+            const existingRecord = await findCertificateByTeamName(teamName);
             if (existingRecord && existingRecord.event === event) {
                 await removeFromRetryQueue(_id);
                 results.push({
                     studentName,
-                    srn,
+                    teamName,
                     event,
                     status: "removed",
                     message: "Certificate already exists"
@@ -398,15 +404,14 @@ const processRetryQueue = async () => {
             }
 
             // Attempt to mint the certificate
-            // --- ✅ Call the new service ---
             // Map 'event' to 'achievement' which the service expects
-            const studentData = { ...item, achievement: item.event };
+            const studentData = { ...item, teamName, achievement: item.event, srn: teamName };
             const newRecord = await mintAndPinCertificate(studentData, universityWallet);
             await removeFromRetryQueue(_id);
 
             results.push({
                 studentName: newRecord.studentName,
-                srn: newRecord.srn,
+                teamName,
                 event: newRecord.achievement,
                 status: "success",
                 transactionHash: newRecord.transactionHash,
@@ -414,7 +419,7 @@ const processRetryQueue = async () => {
             });
 
         } catch (error) {
-            console.error(`Retry failed for ${item.studentName} (${item.srn}):`, error);
+            console.error(`Retry failed for ${item.studentName} (${item.teamName || item.srn}):`, error);
             
             // Update retry count and status
             const updateData = {
@@ -426,11 +431,11 @@ const processRetryQueue = async () => {
 
             results.push({
                 studentName: item.studentName,
-                srn: item.srn,
+                teamName: item.teamName || item.srn,
                 event: item.event,
                 status: item.retryCount >= 2 ? "failed_permanently" : "retry_failed",
                 error: error.message,
-                retryCount: item.retryCount + 1
+                retryCount: (item.retryCount || 0) + 1
             });
         }
     }
