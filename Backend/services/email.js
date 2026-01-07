@@ -34,22 +34,32 @@ async function sendCertificateEmail(recipientEmail, record) {
 
   const transporter = createTransporter();
 
-  // Friendly HTML email for students — they don't need blockchain details
   const html = `
-    <div style="font-family: Arial, sans-serif; line-height:1.4;">
+    <div style="font-family: Arial, sans-serif; line-height:1.6;">
       <h2>Congratulations, ${record.studentName}!</h2>
-      <p>You have been awarded a certificate for <strong>${record.event || record.achievement}</strong> on <strong>${record.date}</strong>.</p>
-      <p>You can view or download your certificate here: <a href="${record.imageUrl}">View Certificate</a></p>
-      <p>If you didn't request this or have questions, reply to this email.</p>
+      <p>We are delighted to inform you that you have been awarded a certificate for <strong>${record.event || record.achievement}</strong> in <strong>CIE Spark Season 01</strong>.</p>
+      <p>Your certificate is now ready and can be accessed here: <a href="${record.imageUrl}" style="color: #0066cc;">View Certificate</a></p>
+      <p>We appreciate your enthusiasm and active involvement in this event. We hope this experience has been enriching and look forward to your continued participation in future initiatives.</p>
+      <p>Should you have any questions or require assistance, please feel free to reach out to us.</p>
       <br/>
-      <p>Best regards,<br/><strong>CIE, PES University</strong></p>
+      <p>Thanks and Regards,<br/>
+      Team CIE
+      </p>
+      <p>
+      <img src="https://indigo-additional-parrotfish-348.mypinata.cloud/ipfs/bafkreiavl6ypns73hsdcrw4wmklqr2f3giqp4hapt6j6s6yjmpf6wavmha" width="120"/>
+      </p>
+      <p>
+      <strong>Center for Innovation and Entrepreneurship (CIE)</strong><br/>
+      PES University, Bengaluru, India [www.pes.edu]<br/>
+      M: cieprogram@pes.edu
+      </p>
     </div>
   `;
 
   const mailOptions = {
-    from: `${process.env.EMAIL_FROM_NAME || "CIE PESU"} <${process.env.EMAIL_USER}>`,
+    from: `${process.env.EMAIL_FROM_NAME || "CIE | PES University"} <${process.env.EMAIL_USER}>`,
     to: recipientEmail,
-    subject: `Certificate for CIE Spark`,
+    subject: `Certificate - CIE Spark`,
     //subject: `Certificate for ${record.event || record.achievement}`,
     text: `Congratulations ${record.studentName}! Your certificate for ${record.event || record.achievement} on ${record.date} is ready. View: ${record.imageUrl}`,
     html,
