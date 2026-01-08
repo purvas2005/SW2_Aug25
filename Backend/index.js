@@ -300,7 +300,7 @@ app.post("/api/mint-all-badges", async (req, res) => {
                 if (newRecord && newRecord.studentEmail) {
                     try {
                       await sendCertificateEmail(newRecord.studentEmail, newRecord);
-                      console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+                      console.log(`📧 Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
                     } catch (err) {
                         console.error(`❌ Email failed for ${newRecord.studentEmail}:`, err);
                     }
