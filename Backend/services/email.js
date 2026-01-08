@@ -35,23 +35,22 @@ async function sendCertificateEmail(recipientEmail, record) {
   const transporter = createTransporter();
 
   const html = `
-    <div style="font-family: Arial, sans-serif; line-height:1.6;">
-      <h2>Congratulations, ${record.studentName}!</h2>
-      <p>We are delighted to inform you that you have been awarded a certificate for <strong>${record.event || record.achievement}</strong> in <strong>CIE Spark Season 01</strong>.</p>
-      <p>Your certificate is now ready and can be accessed here: <a href="${record.imageUrl}" style="color: #0066cc;">View Certificate</a></p>
-      <p>We appreciate your enthusiasm and active involvement in this event. We hope this experience has been enriching and look forward to your continued participation in future initiatives.</p>
-      <p>Should you have any questions or require assistance, please feel free to reach out to us.</p>
-      <br/>
-      <p>Thanks and Regards,<br/>
-      Team CIE
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height:1.6;">
+      <p style="font-weight: bold; font-size: 18px; margin-bottom: 20px;">Subject: Your CIE Spark Blockchain Certificate is Ready!</p>
+      <p>Dear CIE Spark Innovator,</p>
+      <p>Congratulations on completing the CIE Spark 2025 Problem Validation Sprint! 🎉</p>
+      <p>Your <strong>blockchain-verified certificate</strong> is now available, recognizing your achievement in <a href="${record.imageUrl}" style="color: #0066cc; text-decoration: none;">View Certificate</a></p>
+      <p>Your journey as a problem-solver has just begun. Share your success and let the world see what you've accomplished!</p> 
+      <p>Best regards,</p>
+      <p style="margin-top: 20px;">
+      <strong>CIE Team</strong><br/>
+      Centre for Innovation & Entrepreneurship<br/>
+      <strong>PES University</strong>
       </p>
       <p>
-      <img src="https://indigo-additional-parrotfish-348.mypinata.cloud/ipfs/bafkreiavl6ypns73hsdcrw4wmklqr2f3giqp4hapt6j6s6yjmpf6wavmha" width="120"/>
-      </p>
+      <img src=https://indigo-additional-parrotfish-348.mypinata.cloud/ipfs/bafkreihnkve73ncr6h5yszuugiky5oosh2vxkiratftvmjyzn5vmlb27gi</p>
       <p>
-      <strong>Center for Innovation and Entrepreneurship (CIE)</strong><br/>
-      PES University, Bengaluru, India [www.pes.edu]<br/>
-      M: cieprogram@pes.edu
+      <a href="https://cie.pe.edu" style="color: #0066cc; text-decoration: none;">cie.pe.edu</a>
       </p>
     </div>
   `;
@@ -59,7 +58,7 @@ async function sendCertificateEmail(recipientEmail, record) {
   const mailOptions = {
     from: `${process.env.EMAIL_FROM_NAME || "CIE | PES University"} <${process.env.EMAIL_USER}>`,
     to: recipientEmail,
-    subject: `Certificate - CIE Spark`,
+    subject: `Your CIE Spark Blockchain Certificate is Ready!`,
     //subject: `Certificate for ${record.event || record.achievement}`,
     text: `Congratulations ${record.studentName}! Your certificate for ${record.event || record.achievement} on ${record.date} is ready. View: ${record.imageUrl}`,
     html,
