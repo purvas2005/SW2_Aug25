@@ -1,6 +1,7 @@
 // services/email.js
 const nodemailer = require("nodemailer");
 
+
 /**
  * Creates and returns a nodemailer transporter using env vars EMAIL_USER and EMAIL_PASS.
  * Uses Gmail by default; you can change 'service' or use SMTP details instead.
@@ -43,6 +44,16 @@ async function sendCertificateEmail(recipientEmail, record) {
       <p>If you didn't request this or have questions, reply to this email.</p>
       <br/>
       <p>Best regards,<br/><strong>CIE, PES University</strong></p>
+      <p>Thanks and Regards,
+      Team CIE
+
+      Center for Innovation and Entrepreneurship (CIE)
+      PES University, Bengaluru, India [www.pes.edu]
+      M: cieprogram@pes.edu
+      </p>
+      <p>
+      <img src="https://indigo-additional-parrotfish-348.mypinata.cloud/ipfs/bafkreiavl6ypns73hsdcrw4wmklqr2f3giqp4hapt6j6s6yjmpf6wavmha" width="120"/>
+      </p>
     </div>
   `;
 

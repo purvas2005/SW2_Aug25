@@ -11,12 +11,31 @@ const { mintAndPinCertificate } = require("./services/pinning-service");
 const { sendCertificateEmail } = require("./services/email");
 // Update imports to use teamName-based lookup
 const { connectDB, saveCertificateRecord, findCertificateByTeamName, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
+// NEW: robust CSV parser for quoted commas
+const csv = require("csv-parser");
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Helper: read CSV rows with proper handling of quoted fields and BOM
+async function readCsvRows(csvFilePath) {
+  return new Promise((resolve, reject) => {
+    const rows = [];
+    fs.createReadStream(csvFilePath)
+      .pipe(csv({
+        separator: ',',
+        strict: false,
+        mapHeaders: ({ header }) => (header || "").replace(/^\uFEFF/, '').trim(),
+        mapValues: ({ value }) => (typeof value === 'string' ? value.trim() : value),
+      }))
+      .on('data', (row) => rows.push(row))
+      .on('error', reject)
+      .on('end', () => resolve(rows));
+  });
+}
 
 // Routes
 app.get("/", (req, res) => {
@@ -201,22 +220,8 @@ app.get("/api/badges", async (req, res) => {
             return res.status(404).json({ error: "badges.csv file not found" });
         }
 
-        const csvData = fs.readFileSync(csvFilePath, "utf8");
-        const lines = csvData.trim().split("\n");
-        const headers = lines[0].split(",").map(h => h.trim());
-        
-        const badges = [];
-        for (let i = 1; i < lines.length; i++) {
-            if (lines[i].trim()) {
-                const values = lines[i].split(",").map(v => v.trim());
-                const badge = {};
-                headers.forEach((header, index) => {
-                    badge[header] = values[index] || "";
-                });
-                badges.push(badge);
-            }
-        }
-
+        // Use robust CSV reader to handle quoted commas
+        const badges = await readCsvRows(csvFilePath);
         res.status(200).json(badges);
     } catch (error) {
         console.error("Failed to read badges.csv:", error);
@@ -236,107 +241,98 @@ app.post("/api/mint-all-badges", async (req, res) => {
             return res.status(404).json({ error: "badges.csv file not found" });
         }
 
-        const csvData = fs.readFileSync(csvFilePath, "utf8");
-        const lines = csvData.trim().split("\n");
-        const headers = lines[0].split(",").map(h => h.trim());
-        
-        const results = [];
         const universityWallet = process.env.COMMON_WALLET_ADDRESS;
 
         if (!universityWallet) {
             return res.status(500).json({ error: "Server configuration error: Common wallet address is not set." });
         }
 
-        for (let i = 1; i < lines.length; i++) {
-            if (lines[i].trim()) {
-                try {
-                    const values = lines[i].split(",").map(v => v.trim());
-                    const student = {};
-                    headers.forEach((header, index) => {
-                        student[header] = values[index] || "";
-                    });
+        // Read CSV with proper parsing
+        const rows = await readCsvRows(csvFilePath);
+        const results = [];
 
-                    const { studentName, teamName, achievement, date, projectDescription, studentEmail } = student;
+        for (const student of rows) {
+            if (!student || Object.keys(student).length === 0) continue;
+            try {
+                const { studentName, teamName, achievement, date, projectDescription, studentEmail } = student;
 
-                    if (!studentName || !teamName || !achievement || !date) {
-                        results.push({
-                            studentName: studentName || "Unknown",
-                            teamName: teamName || "Unknown",
-                            status: "failed",
-                            error: "Missing required fields"
-                        });
-                        continue;
-                    }
-
-                    // Check if certificate already exists (using teamName as identifier)
-                    const existingRecord = await findCertificateByTeamName(teamName);
-                    if (existingRecord && existingRecord.event === achievement) {
-                        results.push({
-                            studentName,
-                            teamName,
-                            event: achievement,
-                            status: "skipped",
-                            message: "Certificate already exists"
-                        });
-                        continue;
-                    }
-
-                    // Generate and mint certificate
-                    // Map teamName to srn for backward compatibility
-                    const payload = { ...student, srn: teamName };
-                    const newRecord = await mintAndPinCertificate(payload, universityWallet);
-
+                if (!studentName || !teamName || !achievement || !date) {
                     results.push({
-                        studentName: newRecord.studentName,
-                        teamName: payload.teamName || teamName,
-                        event: newRecord.achievement,
-                        status: "success",
-                        transactionHash: newRecord.transactionHash,
-                        imageUrl: newRecord.imageUrl
+                        studentName: studentName || "Unknown",
+                        teamName: teamName || "Unknown",
+                        status: "failed",
+                        error: "Missing required fields"
                     });
+                    continue;
+                }
+
+                // Check if certificate already exists (using teamName as identifier)
+                const existingRecord = await findCertificateByTeamName(teamName);
+                if (existingRecord && existingRecord.event === achievement) {
+                    results.push({
+                        studentName,
+                        teamName,
+                        event: achievement,
+                        status: "skipped",
+                        message: "Certificate already exists"
+                    });
+                    continue;
+                }
+
+                // Generate and mint certificate
+                // Map teamName to srn for backward compatibility
+                const payload = { ...student, srn: teamName };
+                const newRecord = await mintAndPinCertificate(payload, universityWallet);
+
+                results.push({
+                    studentName: newRecord.studentName,
+                    teamName: payload.teamName || teamName,
+                    event: newRecord.achievement,
+                    status: "success",
+                    transactionHash: newRecord.transactionHash,
+                    imageUrl: newRecord.imageUrl
+                });
 
 
-                    // Send email to student if email exists (catch errors so loop continues)
+                // Send email to student if email exists (catch errors so loop continues)
 
 
-                    if (newRecord && newRecord.studentEmail) {
-                        try {
-                          await sendCertificateEmail(newRecord.studentEmail, newRecord);
-                          console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
-                        } catch (err) {
-                            console.error(`❌ Email failed for ${newRecord.studentEmail}:`, err);
-                        }
-                        }
-
-                } catch (error) {
-                    console.error(`Failed to mint certificate for student ${i}:`, error); 
-                    // Add failed certificate to retry queue
-                    const values = lines[i].split(",").map(v => v.trim());
-                    const failedRecord = {
-                        studentName: values[0] || "Unknown",
-                        teamName: values[1] || "Unknown", 
-                        event: values[2] || "Unknown",
-                        date: values[3] || "Unknown",
-                        error: error.message
-                    };
-                    
+                if (newRecord && newRecord.studentEmail) {
                     try {
-                        await addToRetryQueue(failedRecord);
-                        results.push({
-                            ...failedRecord,
-                            status: "failed",
-                            error: error.message,
-                            queued: true
-                        });
-                    } catch (queueError) {
-                        console.error("Failed to add to retry queue:", queueError);
-                        results.push({
-                            ...failedRecord,
-                            status: "failed",
-                            error: error.message,
-                            queued: false
-                        });
+                      await sendCertificateEmail(newRecord.studentEmail, newRecord);
+                      console.log(`✅ Email sent to ${newRecord.studentEmail} for SRN ${newRecord.srn}`);
+                    } catch (err) {
+                        console.error(`❌ Email failed for ${newRecord.studentEmail}:`, err);
                     }
+                    }
+
+            } catch (error) {
+                console.error(`Failed to mint certificate for student ${student.studentName || 'Unknown'}:`, error); 
+                // Add failed certificate to retry queue using parsed row (no manual split)
+                const failedRecord = {
+                    studentName: student.studentName || "Unknown",
+                    teamName: student.teamName || "Unknown", 
+                    event: student.achievement || student.event || "Unknown",
+                    date: student.date || "Unknown",
+                    error: error.message
+                };
+                
+                try {
+                    await addToRetryQueue(failedRecord);
+                    results.push({
+                        ...failedRecord,
+                        status: "failed",
+                        error: error.message,
+                        queued: true
+                    });
+                } catch (queueError) {
+                    console.error("Failed to add to retry queue:", queueError);
+                    results.push({
+                        ...failedRecord,
+                        status: "failed",
+                        error: error.message,
+                        queued: false
+                    });
                 }
             }
         }
