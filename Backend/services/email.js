@@ -1,6 +1,7 @@
 // services/email.js
 const nodemailer = require("nodemailer");
 
+
 /**
  * Creates and returns a nodemailer transporter using env vars EMAIL_USER and EMAIL_PASS.
  * Uses Gmail by default; you can change 'service' or use SMTP details instead.
@@ -34,22 +35,32 @@ async function sendCertificateEmail(recipientEmail, record) {
 
   const transporter = createTransporter();
 
-  // Friendly HTML email for students — they don't need blockchain details
   const html = `
-    <div style="font-family: Arial, sans-serif; line-height:1.4;">
-      <h2>Congratulations, ${record.studentName}!</h2>
-      <p>You have been awarded a certificate for <strong>${record.event || record.achievement}</strong> on <strong>${record.date}</strong>.</p>
-      <p>You can view or download your certificate here: <a href="${record.imageUrl}">View Certificate</a></p>
-      <p>If you didn't request this or have questions, reply to this email.</p>
-      <br/>
-      <p>Best regards,<br/><strong>CIE, PES University</strong></p>
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height:1.6;">
+      <p style="font-weight: bold; font-size: 18px; margin-bottom: 20px;">Subject: Your CIE Spark Blockchain Certificate is Ready!</p>
+      <p>Dear CIE Spark Innovator,</p>
+      <p>Congratulations on completing the CIE Spark 2025 Problem Validation Sprint! 🎉</p>
+      <p>Your <strong>blockchain-verified certificate</strong> is now available, recognizing your achievement. <a href="${record.imageUrl}" style="color: #0066cc; text-decoration: none;">View Certificate</a></p>
+      <p>Your journey as a problem-solver has just begun. Share your success and let the world see what you've accomplished!</p> 
+      <p>Best regards,</p>
+      <p style="margin-top: 20px;">
+      <strong>CIE Team</strong><br/>
+      Centre for Innovation & Entrepreneurship<br/>
+      <strong>PES University</strong>
+      </p>
+      <p>
+      <img src="https://indigo-additional-parrotfish-348.mypinata.cloud/ipfs/bafkreihnkve73ncr6h5yszuugiky5oosh2vxkiratftvmjyzn5vmlb27gi" width="120"/>
+      </p>
+      <p>
+      <a href="https://cie.pes.edu" style="color: #0066cc; text-decoration: none;">cie.pes.edu</a>
+      </p>
     </div>
   `;
 
   const mailOptions = {
-    from: `${process.env.EMAIL_FROM_NAME || "CIE PESU"} <${process.env.EMAIL_USER}>`,
+    from: `${process.env.EMAIL_FROM_NAME || "CIE | PES University"} <${process.env.EMAIL_USER}>`,
     to: recipientEmail,
-    subject: `Certificate for CIE Spark`,
+    subject: `Your CIE Spark Blockchain Certificate is Ready!`,
     //subject: `Certificate for ${record.event || record.achievement}`,
     text: `Congratulations ${record.studentName}! Your certificate for ${record.event || record.achievement} on ${record.date} is ready. View: ${record.imageUrl}`,
     html,
