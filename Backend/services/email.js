@@ -1,6 +1,7 @@
 // services/email.js
 const nodemailer = require("nodemailer");
 
+
 /**
  * Creates and returns a nodemailer transporter using env vars EMAIL_USER and EMAIL_PASS.
  * Uses Gmail by default; you can change 'service' or use SMTP details instead.
