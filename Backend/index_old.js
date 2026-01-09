@@ -9,9 +9,8 @@ const path = require("path");
 const { verifyTransaction } = require("./services/polygon");
 const { mintAndPinCertificate } = require("./services/pinning-service");
 const { sendCertificateEmail } = require("./services/email");
-
 // Update imports to use teamName-based lookup
-const { connectDB, saveCertificateRecord, findCertificateByTeamName, findCertificateByCompositeKey, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database");
+const { connectDB, saveCertificateRecord, findCertificateByTeamName, addToRetryQueue, getRetryQueueItems, updateRetryQueueItem, removeFromRetryQueue, getAllCertificates } = require("./services/database_old");
 // NEW: robust CSV parser for quoted commas
 const csv = require("csv-parser");
 const app = express();
@@ -90,7 +89,7 @@ app.post("/api/mint", async (req, res) => {
  */
 app.get("/api/certificates", async (req, res) => {
     try {
-        const { getAllCertificates } = require("./services/database");
+        const { getAllCertificates } = require("./services/database_old");
         const certificates = await getAllCertificates();
         
         // Transform the data to match frontend expectations
@@ -124,7 +123,7 @@ app.get("/api/certificates", async (req, res) => {
 app.get("/api/certificate/:teamName/:eventName", async (req, res) => {
     try {
         const { teamName, eventName } = req.params;
-        const { getAllCertificates } = require("./services/database");
+        const { getAllCertificates } = require("./services/database_old");
         const certificates = await getAllCertificates();
         
         // Find certificate by matching teamName and normalized event name
@@ -268,11 +267,7 @@ app.post("/api/mint-all-badges", async (req, res) => {
                 }
 
                 // Check if certificate already exists (using teamName as identifier)
-                const existingRecord = await findCertificateByCompositeKey(
-                    teamName,
-                    studentEmail,
-                    achievement
-                );
+                const existingRecord = await findCertificateByTeamName(teamName);
                 if (existingRecord && existingRecord.event === achievement) {
                     results.push({
                         studentName,
@@ -418,12 +413,8 @@ const processRetryQueue = async () => {
             const { studentName, teamName, event, date, _id } = { ...item, teamName: item.teamName || item.srn };
 
             // Check if certificate was created since adding to queue
-            const existingRecord = await findCertificateByCompositeKey(
-                teamName,
-                item.studentEmail || "",
-                event
-            );
-            if (existingRecord) {
+            const existingRecord = await findCertificateByTeamName(teamName);
+            if (existingRecord && existingRecord.event === event) {
                 await removeFromRetryQueue(_id);
                 results.push({
                     studentName,
