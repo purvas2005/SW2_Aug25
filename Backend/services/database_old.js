@@ -68,18 +68,6 @@ const findCertificateByTeamName = async (teamName) => {
     }
 };
 
-const findCertificateByCompositeKey = async (teamName, studentEmail, event) => {
-    if (!db) throw new Error("Database not connected.");
-
-    const collection = db.collection("certificates");
-
-    return await collection.findOne({
-        teamName: teamName,
-        studentEmail: studentEmail,
-        event: event
-    });
-};
-
 /**
  * Retrieves all certificate records from the 'certificates' collection.
  * @returns {Promise<Array>} Array of all certificate records
@@ -203,8 +191,7 @@ const removeFromRetryQueue = async (id) => {
 module.exports = { 
     connectDB, 
     saveCertificateRecord, 
-    findCertificateByTeamName,
-    findCertificateByCompositeKey, 
+    findCertificateByTeamName, 
     getAllCertificates,
     addToRetryQueue,
     getRetryQueueItems,
