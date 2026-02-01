@@ -116,7 +116,14 @@ const generateCertificate = async (name, teamName, achievement, date, projectDes
       ctx.drawImage(qrDraw, qrX, qrY, qrSize, qrSize);
     }
 
-    return canvas.toBuffer("image/png");
+    const pngBuffer = canvas.toBuffer("image/png");
+
+    const sharp = require("sharp");
+    const webpBuffer = await sharp(pngBuffer)
+      .webp({ quality: 80 })
+      .toBuffer();
+    return webpBuffer;
+    
   } catch (error) {
     console.error("❌ Certificate Generation Error:", error);
     throw error;
