@@ -2,9 +2,12 @@ curl -X POST http://localhost:5001/api/mint \
 -H "Content-Type: application/json" \
 -d '{
   "studentName": "Yash Gupta",
-  "srn": "PES1UG21CS999",
-  "event": "Innovate 2025 Hackathon",
-  "date": "October 16, 2025"
+  "teamName": "Section H",
+  "achievement": "Innovate 2025 Hackathon",
+  "date": "October 16, 2025",
+  "projectDescription" : "Something innovative, checking for commas",
+  "studentEmail" : "spurva449@gmail.com"
+
 }'
 
 
@@ -15,3 +18,4 @@ Windows: Invoke-RestMethod -Uri "http://localhost:5001/api/mint" -Method POST -H
 
 http://localhost:5173/certificate/PES1UG21CS999/innovate2025hackathon
 
+ studentName, teamName, achievement, date, projectDescription, studentEmail

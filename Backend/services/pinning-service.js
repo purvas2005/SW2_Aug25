@@ -2,7 +2,7 @@
 const { generateCertificate } = require("./certificate");
 const { uploadBufferToPinata, uploadJsonToPinata } = require("./pinata");
 const { mintCertificateNft } = require("./polygon");
-const { saveCertificateRecord } = require("./database_old");
+const { saveCertificateRecord } = require("./database");
 
 /**
  * Orchestrates the entire certificate minting process (QR → FINAL metadata).
